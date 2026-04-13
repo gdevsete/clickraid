@@ -43,7 +43,7 @@ export default async function handler(req, res) {
       zipCode: shipping.cep.replace(/\D/g, ''),
     },
     pix: { expiresInDays: 1 },
-    postbackUrl: 'https://clickraidofc.com.br/api/webhook',
+    postbackUrl: 'https://www.clickraidofc.com.br/api/webhook',
     externalRef,
     metadata: 'Clickraid - Miniaturas Chaveiro',
   };

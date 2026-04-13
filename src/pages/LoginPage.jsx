@@ -59,7 +59,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://clickraidofc.com.br/login',
+      redirectTo: 'https://www.clickraidofc.com.br/login',
     });
     if (error) setError('Erro ao enviar e-mail de recuperação.');
     else setSuccess('E-mail de recuperação enviado! Verifique sua caixa de entrada.');

@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     // Invite user — Supabase sends "Set your password" email
     const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: { full_name: name },
-      redirectTo: 'https://clickraidofc.com.br/minha-conta',
+      redirectTo: 'https://www.clickraidofc.com.br/minha-conta',
     });
 
     const alreadyExists = inviteError?.message === 'User already registered';
