@@ -5,32 +5,49 @@ export default async function handler(req, res) {
   const admin = await requireAdmin(req, sb);
   if (!admin) return res.status(403).json({ error: 'Acesso negado' });
 
-  // GET: list all orders with profile join
+  // GET: list all orders
   if (req.method === 'GET') {
-    const { status, search, limit = 50, offset = 0 } = req.query;
+    const { status, search, limit = 100, offset = 0 } = req.query;
 
     let query = sb
       .from('orders')
-      .select(`*, profiles(full_name, phone, cpf, address)`)
+      .select('*')
       .order('created_at', { ascending: false })
       .range(Number(offset), Number(offset) + Number(limit) - 1);
 
     if (status && status !== 'all') query = query.eq('status', status);
 
-    const { data, error, count } = await query;
+    const { data: orders, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
 
-    // Filter by search client-side (name/email/transactionId)
-    let filtered = data || [];
+    if (!orders || orders.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    // Fetch profiles separately (no direct FK between orders.user_id and profiles.id)
+    const userIds = [...new Set(orders.map(o => o.user_id).filter(Boolean))];
+    const { data: profiles } = userIds.length
+      ? await sb.from('profiles').select('id, full_name, phone, cpf, address').in('id', userIds)
+      : { data: [] };
+
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+    let merged = orders.map(o => ({
+      ...o,
+      profiles: profileMap[o.user_id] || null,
+    }));
+
+    // Search filter
     if (search) {
       const q = search.toLowerCase();
-      filtered = filtered.filter(o =>
+      merged = merged.filter(o =>
         o.transaction_id?.toLowerCase().includes(q) ||
         o.profiles?.full_name?.toLowerCase().includes(q)
       );
     }
 
-    return res.status(200).json({ success: true, data: filtered });
+    return res.status(200).json({ success: true, data: merged });
   }
 
   // PATCH: update order status
