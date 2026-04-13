@@ -4,6 +4,21 @@ import { useCart } from '../context/CartContext';
 
 const formatPrice = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const isValidCPF = (cpf) => {
+  const n = cpf.replace(/\D/g, '');
+  if (n.length !== 11 || /^(\d)\1{10}$/.test(n)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(n[i]) * (10 - i);
+  let r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  if (r !== parseInt(n[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(n[i]) * (11 - i);
+  r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  return r === parseInt(n[10]);
+};
+
 const maskCPF = (v) => {
   v = v.replace(/\D/g, '').slice(0, 11);
   if (v.length > 9) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
@@ -95,6 +110,7 @@ export default function CheckoutPage() {
   const [transactionId, setTransactionId] = useState(null);
   const [copied, setCopied] = useState(false);
   const [payError, setPayError] = useState(null);
+  const [cpfError, setCpfError] = useState('');
   const pollRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -163,10 +179,16 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Erro ao criar cobrança PIX');
-      const pd = data.data.paymentData;
+      console.log('[PIX] API response:', JSON.stringify(data, null, 2));
+      const pd = data.data?.paymentData || data.data?.pix || data.data || {};
+      const copyPaste = pd.copyPaste || pd.pixCopyPaste || pd.qrCode || pd.emv || '';
+      const rawQr = pd.qrCodeBase64 || pd.qrcode || pd.qr_code_base64 || pd.qrCodeImage || pd.pixQrCode || '';
+      const qrCodeUrl = rawQr
+        ? (rawQr.startsWith('data:') ? rawQr : `data:image/png;base64,${rawQr}`)
+        : `https://api.qrserver.com/v1/create-qr-code/?size=224x224&data=${encodeURIComponent(copyPaste)}`;
       setPixData({
-        qrCodeBase64: pd.qrCodeBase64?.startsWith('data:') ? pd.qrCodeBase64 : `data:image/png;base64,${pd.qrCodeBase64}`,
-        copyPaste: pd.copyPaste,
+        qrCodeUrl,
+        copyPaste,
         expiresAt: pd.expiresAt,
       });
       setTransactionId(data.data.transactionId);
@@ -259,7 +281,12 @@ export default function CheckoutPage() {
           {step === 1 && (
             <div className="animate-fade-in">
               <h2 className="font-heading text-3xl text-white tracking-wide mb-6">DADOS PESSOAIS</h2>
-              <form onSubmit={(e) => { e.preventDefault(); setStep(2); }} className="grid grid-cols-2 gap-4">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!isValidCPF(form.cpf)) { setCpfError('CPF inválido. Verifique e tente novamente.'); return; }
+                setCpfError('');
+                setStep(2);
+              }} className="grid grid-cols-2 gap-4">
                 <Field label="Nome Completo" required colSpan={2}>
                   <Input name="nome" value={form.nome} onChange={handleChange} placeholder="João da Silva" required />
                 </Field>
@@ -270,7 +297,15 @@ export default function CheckoutPage() {
                   <Input name="telefone" value={form.telefone} onChange={(e) => set('telefone', maskPhone(e.target.value))} placeholder="(11) 99999-9999" required />
                 </Field>
                 <Field label="CPF" required colSpan={2}>
-                  <Input name="cpf" value={form.cpf} onChange={(e) => set('cpf', maskCPF(e.target.value))} placeholder="000.000.000-00" required minLength={14} />
+                  <Input
+                    name="cpf"
+                    value={form.cpf}
+                    onChange={(e) => { set('cpf', maskCPF(e.target.value)); if (cpfError) setCpfError(''); }}
+                    placeholder="000.000.000-00"
+                    required
+                    minLength={14}
+                  />
+                  {cpfError && <p className="text-xs text-brand-red mt-1">{cpfError}</p>}
                 </Field>
                 <div className="col-span-2 flex justify-end pt-2">
                   <button type="submit" className="btn-primary px-12 py-4">
@@ -431,9 +466,15 @@ export default function CheckoutPage() {
               <div className="flex justify-center mb-4">
                 <div className="bg-white p-4 inline-block">
                   <img
-                    src={pixData.qrCodeBase64}
+                    src={pixData.qrCodeUrl}
                     alt="QR Code PIX"
                     className="w-56 h-56 object-contain"
+                    onError={(e) => {
+                      if (!e.target.dataset.fallback) {
+                        e.target.dataset.fallback = '1';
+                        e.target.src = `https://api.qrserver.com/v1/create-qr-code/?size=224x224&data=${encodeURIComponent(pixData.copyPaste)}`;
+                      }
+                    }}
                   />
                 </div>
               </div>
