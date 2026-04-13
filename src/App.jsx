@@ -17,10 +17,21 @@ import TermosPage from './pages/TermosPage';
 import TrocasPage from './pages/TrocasPage';
 import LoginPage from './pages/LoginPage';
 import AccountPage from './pages/AccountPage';
+import AdminPage from './pages/AdminPage';
+import { fbq, pixelPageView } from './lib/pixel';
 
-function ScrollToTop() {
+// Initialize Facebook Pixel
+const PIXEL_ID = import.meta.env.VITE_FB_PIXEL_ID;
+if (PIXEL_ID && typeof window !== 'undefined' && window.fbq) {
+  window.fbq('init', PIXEL_ID);
+}
+
+function ScrollToTopAndPixel() {
   const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    pixelPageView();
+  }, [pathname]);
   return null;
 }
 
@@ -29,12 +40,14 @@ function Layout({ children }) {
     <div className="min-h-screen flex flex-col bg-brand-black">
       <Navbar />
       <CartDrawer />
-      <main className="flex-1">
-        {children}
-      </main>
+      <main className="flex-1">{children}</main>
       <Footer />
     </div>
   );
+}
+
+function AdminLayout({ children }) {
+  return <div className="min-h-screen bg-brand-black">{children}</div>;
 }
 
 function NotFound() {
@@ -53,24 +66,32 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <CartProvider>
-          <ScrollToTop />
-          <Layout>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/produtos" element={<ProductsPage />} />
-              <Route path="/produto/:slug" element={<ProductDetailPage />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
-              <Route path="/sobre" element={<AboutPage />} />
-              <Route path="/faq" element={<FaqPage />} />
-              <Route path="/encomendas" element={<EncomendaPage />} />
-              <Route path="/privacidade" element={<PrivacidadePage />} />
-              <Route path="/termos" element={<TermosPage />} />
-              <Route path="/trocas" element={<TrocasPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/minha-conta" element={<AccountPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
+          <ScrollToTopAndPixel />
+          <Routes>
+            {/* Admin — sem Navbar/Footer */}
+            <Route path="/admin/*" element={<AdminLayout><AdminPage /></AdminLayout>} />
+
+            {/* Loja */}
+            <Route path="/*" element={
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/produtos" element={<ProductsPage />} />
+                  <Route path="/produto/:slug" element={<ProductDetailPage />} />
+                  <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/sobre" element={<AboutPage />} />
+                  <Route path="/faq" element={<FaqPage />} />
+                  <Route path="/encomendas" element={<EncomendaPage />} />
+                  <Route path="/privacidade" element={<PrivacidadePage />} />
+                  <Route path="/termos" element={<TermosPage />} />
+                  <Route path="/trocas" element={<TrocasPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/minha-conta" element={<AccountPage />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Layout>
+            } />
+          </Routes>
         </CartProvider>
       </AuthProvider>
     </BrowserRouter>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { pixelInitiateCheckout, pixelPurchase } from '../lib/pixel';
 
 const formatPrice = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -154,6 +155,7 @@ export default function CheckoutPage() {
         if (status === 'PAID') {
           clearInterval(pollRef.current);
           clearCart();
+          pixelPurchase({ value: snapItems.reduce((s, i) => s + i.price * i.quantity, 0) * 0.95, transactionId: txId, items: snapItems });
           // Register user account and send "set password" email
           fetch('/api/register-user', {
             method: 'POST',
@@ -338,6 +340,7 @@ export default function CheckoutPage() {
                 e.preventDefault();
                 if (!isValidCPF(form.cpf)) { setCpfError('CPF inválido. Verifique e tente novamente.'); return; }
                 setCpfError('');
+                pixelInitiateCheckout({ total, numItems: items.reduce((s, i) => s + i.quantity, 0) });
                 setStep(2);
               }} className="grid grid-cols-2 gap-4">
                 <Field label="Nome Completo" required colSpan={2}>

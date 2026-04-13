@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { pixelViewContent } from '../lib/pixel';
 import ProductCard from '../components/ProductCard';
 import { getProductBySlug, getRelatedProducts } from '../data/products';
 
@@ -40,6 +41,10 @@ export default function ProductDetailPage() {
   const [lightbox, setLightbox] = useState(null); // { photos: [], index: 0 }
 
   const product = getProductBySlug(slug);
+
+  useEffect(() => {
+    if (product) pixelViewContent({ name: product.name, price: product.price, category: product.category, contentId: product.id });
+  }, [product?.id]);
 
   if (!product) {
     return (

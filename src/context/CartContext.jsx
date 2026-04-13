@@ -1,4 +1,5 @@
 import { createContext, useContext, useReducer, useState } from 'react';
+import { pixelAddToCart } from '../lib/pixel';
 
 const CartContext = createContext(null);
 
@@ -48,6 +49,7 @@ export function CartProvider({ children }) {
   const addItem = (product, quantity = 1) => {
     dispatch({ type: 'ADD_ITEM', payload: { ...product, quantity } });
     setIsOpen(true);
+    pixelAddToCart({ name: product.shortName || product.name, price: product.price, quantity, contentId: product.id });
   };
 
   const removeItem = (id) => dispatch({ type: 'REMOVE_ITEM', payload: id });

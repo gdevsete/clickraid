@@ -9,6 +9,7 @@ create table if not exists profiles (
   phone       text,
   cpf         text,
   address     jsonb,          -- { rua, numero, complemento, bairro, cidade, estado, cep }
+  is_admin    boolean default false,
   updated_at  timestamptz default now()
 );
 
@@ -42,3 +43,11 @@ create policy "Users see own orders"
   using (auth.uid() = user_id);
 
 -- INSERT/UPDATE só via service_role (API do servidor — bypassa RLS automaticamente)
+
+
+-- ─────────────────────────────────────────────
+-- TORNAR UM USUÁRIO ADMIN
+-- Substitua o e-mail pelo seu e-mail de admin
+-- ─────────────────────────────────────────────
+-- update profiles set is_admin = true
+-- where id = (select id from auth.users where email = 'SEU_EMAIL_ADMIN@email.com');
