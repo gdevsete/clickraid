@@ -161,6 +161,17 @@ export default function CheckoutPage() {
             body: JSON.stringify({
               email: form.email,
               name: form.nome,
+              phone: form.telefone,
+              cpf: form.cpf,
+              address: {
+                rua: form.rua,
+                numero: form.numero,
+                complemento: form.complemento,
+                bairro: form.bairro,
+                cidade: form.cidade,
+                estado: form.estado,
+                cep: form.cep,
+              },
               transactionId: txId,
               orderItems: snapItems,
               total: snapItems.reduce((s, i) => s + i.price * i.quantity, 0) * 0.95,

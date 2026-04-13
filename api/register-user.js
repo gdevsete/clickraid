@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: 'Supabase not configured' });
   }
 
-  const { email, name, transactionId, orderItems, total } = req.body;
+  const { email, name, phone, cpf, address, transactionId, orderItems, total } = req.body;
 
   if (!email || !name) {
     return res.status(400).json({ success: false, message: 'email e name são obrigatórios' });
@@ -24,31 +24,50 @@ export default async function handler(req, res) {
   });
 
   try {
-    // Invite user — Supabase sends an email with a "Set your password" link
+    // Invite user — Supabase sends "Set your password" email
     const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: { full_name: name },
       redirectTo: 'https://clickraidofc.com.br/minha-conta',
     });
 
-    if (inviteError && inviteError.message !== 'User already registered') {
+    const alreadyExists = inviteError?.message === 'User already registered';
+
+    if (inviteError && !alreadyExists) {
       throw inviteError;
     }
 
-    const userId = inviteData?.user?.id;
-
-    // Save order to orders table (if user exists/was created)
-    if (userId && transactionId) {
-      await supabase.from('orders').upsert({
-        user_id: userId,
-        transaction_id: transactionId,
-        items: orderItems || [],
-        amount: Math.round(total * 100),
-        status: 'paid',
-        created_at: new Date().toISOString(),
-      }, { onConflict: 'transaction_id' });
+    // Get user id — from invite or look up existing
+    let userId = inviteData?.user?.id;
+    if (!userId) {
+      const { data: { users } } = await supabase.auth.admin.listUsers();
+      const found = users.find((u) => u.email === email);
+      userId = found?.id;
     }
 
-    const alreadyExists = inviteError?.message === 'User already registered';
+    if (userId) {
+      // Save/update profile (nome, telefone, cpf, endereço)
+      await supabase.from('profiles').upsert({
+        id: userId,
+        full_name: name,
+        phone: phone || null,
+        cpf: cpf || null,
+        address: address || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+
+      // Save order
+      if (transactionId) {
+        await supabase.from('orders').upsert({
+          user_id: userId,
+          transaction_id: transactionId,
+          items: orderItems || [],
+          amount: Math.round((total || 0) * 100),
+          status: 'paid',
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'transaction_id' });
+      }
+    }
+
     return res.status(200).json({
       success: true,
       alreadyExists,
