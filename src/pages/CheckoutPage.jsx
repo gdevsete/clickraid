@@ -111,7 +111,10 @@ export default function CheckoutPage() {
   const [copied, setCopied] = useState(false);
   const [payError, setPayError] = useState(null);
   const [cpfError, setCpfError] = useState('');
+  const [accountMsg, setAccountMsg] = useState('');
   const pollRef = useRef(null);
+  // Keep snapshot of items for success screen (cart is cleared on paid)
+  const itemsSnapshotRef = useRef([]);
 
   const [form, setForm] = useState({
     nome: '', email: '', telefone: '', cpf: '',
@@ -142,7 +145,7 @@ export default function CheckoutPage() {
     }
   };
 
-  const startPolling = (txId) => {
+  const startPolling = (txId, snapItems) => {
     pollRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/payment-status?transactionId=${txId}`);
@@ -150,8 +153,23 @@ export default function CheckoutPage() {
         const status = data.data?.status;
         if (status === 'PAID') {
           clearInterval(pollRef.current);
-          setStep('success');
           clearCart();
+          // Register user account and send "set password" email
+          fetch('/api/register-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: form.email,
+              name: form.nome,
+              transactionId: txId,
+              orderItems: snapItems,
+              total: snapItems.reduce((s, i) => s + i.price * i.quantity, 0) * 0.95,
+            }),
+          })
+            .then((r) => r.json())
+            .then((d) => setAccountMsg(d.message || ''))
+            .catch(() => {});
+          setStep('success');
         } else if (status === 'CANCELLED') {
           clearInterval(pollRef.current);
           setPayError('PIX expirado ou cancelado. Clique em "Tentar Novamente".');
@@ -192,8 +210,9 @@ export default function CheckoutPage() {
         expiresAt: pd.expiresAt,
       });
       setTransactionId(data.data.transactionId);
+      itemsSnapshotRef.current = items.map(i => ({ name: i.shortName || i.name, price: i.price, quantity: i.quantity }));
       setStep('pix');
-      startPolling(data.data.transactionId);
+      startPolling(data.data.transactionId, itemsSnapshotRef.current);
     } catch (err) {
       setPayError(err.message);
     } finally {
@@ -242,27 +261,51 @@ export default function CheckoutPage() {
         {transactionId && (
           <p className="text-gray-600 text-xs mb-1">ID da transação: <span className="font-mono text-gray-500">{transactionId}</span></p>
         )}
-        <p className="text-xs text-gray-600 mb-8">
+        <p className="text-xs text-gray-600 mb-6">
           Prazo de produção: <span className="text-brand-gold">4 dias úteis</span> · Rastreio enviado por e-mail
         </p>
+
+        {/* Account creation notice */}
+        <div className="bg-brand-card border border-brand-gold/40 p-5 mb-6 text-left">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-brand-gold flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <div>
+              <p className="text-white text-sm font-bold mb-1">Sua conta foi criada!</p>
+              {accountMsg ? (
+                <p className="text-gray-400 text-xs">{accountMsg}</p>
+              ) : (
+                <p className="text-gray-400 text-xs">
+                  Enviamos um e-mail para <span className="text-brand-gold">{form.email}</span> com um link para você <strong className="text-white">escolher sua senha</strong> e acessar seus pedidos.
+                </p>
+              )}
+              <p className="text-gray-600 text-xs mt-1">Verifique sua caixa de entrada (e o spam).</p>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-brand-card border border-brand-border p-5 mb-8 text-left">
-          <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Resumo</p>
-          {items.map(i => (
-            <div key={i.id} className="flex justify-between text-sm py-1.5 border-b border-brand-border last:border-0">
-              <span className="text-gray-400">{i.shortName || i.name} × {i.quantity}</span>
+          <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Resumo do pedido</p>
+          {itemsSnapshotRef.current.map((i, idx) => (
+            <div key={idx} className="flex justify-between text-sm py-1.5 border-b border-brand-border last:border-0">
+              <span className="text-gray-400">{i.name} × {i.quantity}</span>
               <span className="text-white">{formatPrice(i.price * i.quantity)}</span>
             </div>
           ))}
           <div className="flex justify-between text-green-400 text-sm mt-2">
             <span>Desconto PIX 5%</span>
-            <span>-{formatPrice(discount)}</span>
+            <span>-{formatPrice(discountedTotal * 0.05263)}</span>
           </div>
           <div className="flex justify-between text-brand-gold font-bold mt-2 pt-2 border-t border-brand-border">
             <span>Total pago</span>
             <span>{formatPrice(discountedTotal)}</span>
           </div>
         </div>
-        <Link to="/" className="btn-primary">Voltar ao Início</Link>
+        <div className="flex gap-3 justify-center">
+          <Link to="/minha-conta" className="btn-dark px-8 py-4">Minha Conta</Link>
+          <Link to="/" className="btn-primary px-8 py-4">Voltar ao Início</Link>
+        </div>
       </div>
     );
   }

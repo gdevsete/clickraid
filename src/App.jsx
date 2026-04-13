@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { CartProvider } from './context/CartContext';
+import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
@@ -14,6 +15,8 @@ import EncomendaPage from './pages/EncomendaPage';
 import PrivacidadePage from './pages/PrivacidadePage';
 import TermosPage from './pages/TermosPage';
 import TrocasPage from './pages/TrocasPage';
+import LoginPage from './pages/LoginPage';
+import AccountPage from './pages/AccountPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -48,24 +51,28 @@ function NotFound() {
 export default function App() {
   return (
     <BrowserRouter>
-      <CartProvider>
-        <ScrollToTop />
-        <Layout>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/produtos" element={<ProductsPage />} />
-            <Route path="/produto/:slug" element={<ProductDetailPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
-            <Route path="/sobre" element={<AboutPage />} />
-            <Route path="/faq" element={<FaqPage />} />
-            <Route path="/encomendas" element={<EncomendaPage />} />
-            <Route path="/privacidade" element={<PrivacidadePage />} />
-            <Route path="/termos" element={<TermosPage />} />
-            <Route path="/trocas" element={<TrocasPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Layout>
-      </CartProvider>
+      <AuthProvider>
+        <CartProvider>
+          <ScrollToTop />
+          <Layout>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/produtos" element={<ProductsPage />} />
+              <Route path="/produto/:slug" element={<ProductDetailPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/sobre" element={<AboutPage />} />
+              <Route path="/faq" element={<FaqPage />} />
+              <Route path="/encomendas" element={<EncomendaPage />} />
+              <Route path="/privacidade" element={<PrivacidadePage />} />
+              <Route path="/termos" element={<TermosPage />} />
+              <Route path="/trocas" element={<TrocasPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/minha-conta" element={<AccountPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Layout>
+        </CartProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
