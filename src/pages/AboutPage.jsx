@@ -7,7 +7,7 @@ export default function AboutPage() {
       {/* HERO */}
       <section className="relative py-28 bg-brand-dark border-b border-brand-border overflow-hidden">
         <div className="absolute inset-0 opacity-10">
-          <img src="https://images.unsplash.com/photo-1578926288207-a90a5366e116?w=1600&q=80" alt="" className="w-full h-full object-cover" />
+          <img src="https://clickraidofficial.com.br/wp-content/uploads/2024/06/BERETTA-M9-1-scaled.jpg" alt="" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-brand-dark via-brand-dark/80 to-transparent" />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 text-center">

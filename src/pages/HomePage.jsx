@@ -57,7 +57,7 @@ export default function HomePage() {
         {/* BG image with overlay */}
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1595590424283-b8f17842773f?w=1600&q=80"
+            src="https://clickraidofficial.com.br/wp-content/uploads/2024/07/AK47-1-scaled.jpg"
             alt=""
             className="w-full h-full object-cover opacity-20"
           />
@@ -332,7 +332,7 @@ export default function HomePage() {
       <section className="relative py-24 overflow-hidden">
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1578926288207-a90a5366e116?w=1600&q=80"
+            src="https://clickraidofficial.com.br/wp-content/uploads/2024/07/MGL-XL-1-scaled.jpg"
             alt=""
             className="w-full h-full object-cover opacity-15"
           />

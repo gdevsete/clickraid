@@ -208,7 +208,6 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'Erro ao criar cobrança PIX');
-      console.log('[PIX] API response:', JSON.stringify(data, null, 2));
       const pd = data.data?.paymentData || data.data?.pix || data.data || {};
       const copyPaste = pd.copyPaste || pd.pixCopyPaste || pd.qrCode || pd.emv || '';
       const rawQr = pd.qrCodeBase64 || pd.qrcode || pd.qr_code_base64 || pd.qrCodeImage || pd.pixQrCode || '';
