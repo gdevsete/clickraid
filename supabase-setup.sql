@@ -5,20 +5,18 @@ create table if not exists orders (
   user_id          uuid references auth.users on delete set null,
   transaction_id   text unique not null,
   items            jsonb default '[]',
-  amount           integer not null,   -- centavos
+  amount           integer not null,   -- centavos (já com desconto PIX)
   status           text not null default 'pending',
   created_at       timestamptz default now()
 );
 
--- Only the user can see their own orders (Row Level Security)
+-- Ativa Row Level Security
 alter table orders enable row level security;
 
+-- Usuário logado só vê os próprios pedidos
 create policy "Users see own orders"
   on orders for select
   using (auth.uid() = user_id);
 
--- Service role can insert/update (used by API functions)
-create policy "Service role full access"
-  on orders for all
-  using (true)
-  with check (true);
+-- INSERT e UPDATE só via service_role (API do servidor — bypassa RLS automaticamente)
+-- Nenhuma policy de insert/update para anon/authenticated = bloqueado no frontend
