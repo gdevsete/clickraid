@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { pixelInitiateCheckout, pixelPurchase } from '../lib/pixel';
+import { pixelInitiateCheckout, pixelAddPaymentInfo, pixelPurchase } from '../lib/pixel';
 import { products } from '../data/products';
 
 const BUMP_DISCOUNT = 0.20; // 20% off accessories added via order bump
@@ -230,7 +230,11 @@ export default function CheckoutPage() {
         expiresAt: pd.expiresAt,
       });
       setTransactionId(data.data.transactionId);
-      itemsSnapshotRef.current = items.map(i => ({ name: i.shortName || i.name, price: i.price, quantity: i.quantity }));
+      // Snapshot inclui id (para content_ids no Pixel) + bump items
+      itemsSnapshotRef.current = [
+        ...items.map(i => ({ id: i.id, name: i.shortName || i.name, price: i.price, quantity: i.quantity })),
+        ...bumpItems.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: 1 })),
+      ];
       setStep('pix');
       startPolling(data.data.transactionId, itemsSnapshotRef.current);
     } catch (err) {
@@ -360,7 +364,11 @@ export default function CheckoutPage() {
                 e.preventDefault();
                 if (!isValidCPF(form.cpf)) { setCpfError('CPF inválido. Verifique e tente novamente.'); return; }
                 setCpfError('');
-                pixelInitiateCheckout({ total, numItems: items.reduce((s, i) => s + i.quantity, 0) });
+                pixelInitiateCheckout({
+                  total,
+                  numItems: items.reduce((s, i) => s + i.quantity, 0),
+                  contentIds: items.map(i => i.id),
+                });
                 setStep(2);
               }} className="grid grid-cols-2 gap-4">
                 <Field label="Nome Completo" required colSpan={2}>
@@ -396,7 +404,11 @@ export default function CheckoutPage() {
           {step === 2 && (
             <div className="animate-fade-in">
               <h2 className="font-heading text-3xl text-white tracking-wide mb-6">ENDEREÇO DE ENTREGA</h2>
-              <form onSubmit={(e) => { e.preventDefault(); setStep(3); }} className="grid grid-cols-2 gap-4">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                pixelAddPaymentInfo({ total, contentIds: items.map(i => i.id) });
+                setStep(3);
+              }} className="grid grid-cols-2 gap-4">
                 {/* CEP */}
                 <Field label="CEP" required colSpan={2}>
                   <div className="relative">

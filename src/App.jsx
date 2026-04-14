@@ -19,20 +19,26 @@ import TrocasPage from './pages/TrocasPage';
 import LoginPage from './pages/LoginPage';
 import AccountPage from './pages/AccountPage';
 import AdminPage from './pages/AdminPage';
-import { fbq, pixelPageView } from './lib/pixel';
+import { pixelPageView } from './lib/pixel';
 
-// Initialize Facebook Pixel
 const PIXEL_ID = import.meta.env.VITE_FB_PIXEL_ID;
-if (PIXEL_ID && typeof window !== 'undefined' && window.fbq) {
-  window.fbq('init', PIXEL_ID);
-}
 
 function ScrollToTopAndPixel() {
   const { pathname } = useLocation();
+
   useEffect(() => {
+    // Initialize pixel on first mount (fbq queue is available immediately
+    // from the inline snippet in index.html; fbevents.js loads async)
+    if (PIXEL_ID && window.fbq) {
+      if (!window._pixelInitialized) {
+        window.fbq('init', PIXEL_ID);
+        window._pixelInitialized = true;
+      }
+    }
     window.scrollTo(0, 0);
     pixelPageView();
   }, [pathname]);
+
   return null;
 }
 
