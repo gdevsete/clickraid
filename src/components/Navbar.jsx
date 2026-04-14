@@ -59,12 +59,11 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-16">
 
             {/* Logo */}
-            <Link to="/" className="flex items-center">
-              <img
-                src="/clickraid-logo.png"
-                alt="ClickRaid"
-                className="h-10 w-auto object-contain"
-              />
+            <Link to="/" className="flex items-center group">
+              <svg viewBox="0 0 340 72" className="h-9 w-auto" xmlns="http://www.w3.org/2000/svg">
+                <text x="0" y="58" fontFamily="'Bebas Neue', Impact, 'Arial Black', sans-serif" fontSize="68" fontWeight="900" letterSpacing="4" fill="#ffffff">CLICK</text>
+                <text x="178" y="58" fontFamily="'Bebas Neue', Impact, 'Arial Black', sans-serif" fontSize="68" fontWeight="900" letterSpacing="4" fill="#c9a84c">RAID</text>
+              </svg>
             </Link>
 
             {/* Desktop Nav */}
