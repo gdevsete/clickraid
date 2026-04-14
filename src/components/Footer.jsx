@@ -9,15 +9,12 @@ export default function Footer() {
 
           {/* Brand */}
           <div className="lg:col-span-1">
-            <Link to="/" className="inline-flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-brand-gold flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-brand-black">
-                  <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/>
-                </svg>
-              </div>
-              <span className="font-heading text-2xl tracking-widest text-white">
-                CLICK<span className="text-brand-gold">RAID</span>
-              </span>
+            <Link to="/" className="inline-flex mb-4">
+              <img
+                src="/clickraid-logo.png"
+                alt="ClickRaid"
+                className="h-12 w-auto object-contain"
+              />
             </Link>
             <p className="text-gray-500 text-sm leading-relaxed mb-4">
               A maior coleção de miniaturas chaveiro de armas de fogo do Brasil.
