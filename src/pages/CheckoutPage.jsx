@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { pixelInitiateCheckout, pixelPurchase } from '../lib/pixel';
+import { products } from '../data/products';
+
+const BUMP_DISCOUNT = 0.20; // 20% off accessories added via order bump
+const BUMP_PRODUCTS = products.filter(p => p.category === 'acessorios');
 
 const formatPrice = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -113,6 +117,7 @@ export default function CheckoutPage() {
   const [payError, setPayError] = useState(null);
   const [cpfError, setCpfError] = useState('');
   const [accountMsg, setAccountMsg] = useState('');
+  const [bumpSelected, setBumpSelected] = useState(new Set());
   const pollRef = useRef(null);
   // Keep snapshot of items for success screen (cart is cleared on paid)
   const itemsSnapshotRef = useRef([]);
@@ -201,10 +206,13 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: items.map(i => ({ name: i.shortName || i.name, price: i.price, quantity: i.quantity })),
+          items: [
+            ...items.map(i => ({ name: i.shortName || i.name, price: i.price, quantity: i.quantity })),
+            ...bumpItems.map(i => ({ name: i.name + ' (Order Bump)', price: i.price, quantity: 1 })),
+          ],
           customer: { nome: form.nome, email: form.email, telefone: form.telefone, cpf: form.cpf },
           shipping: { rua: form.rua, numero: form.numero, complemento: form.complemento, bairro: form.bairro, cidade: form.cidade, estado: form.estado, cep: form.cep },
-          total,
+          total: totalWithBump,
           externalRef,
         }),
       });
@@ -239,8 +247,20 @@ export default function CheckoutPage() {
     setTimeout(() => setCopied(false), 3000);
   };
 
-  const discountedTotal = total * 0.95;
-  const discount = total * 0.05;
+  // Bump items selected by user (with 20% off)
+  const bumpItems = BUMP_PRODUCTS.filter(p => bumpSelected.has(p.id)).map(p => ({
+    id: p.id,
+    name: p.shortName || p.name,
+    price: parseFloat((p.price * (1 - BUMP_DISCOUNT)).toFixed(2)),
+    originalPrice: p.price,
+    quantity: 1,
+    images: p.images,
+  }));
+  const bumpSubtotal = bumpItems.reduce((s, i) => s + i.price, 0);
+  const totalWithBump = total + bumpSubtotal;
+  const discountedTotal = totalWithBump * 0.95;
+  const discount = totalWithBump * 0.05;
+  const pixDiscount = totalWithBump * 0.05;
 
   // ── Empty cart ──────────────────────────────────────────────────────────────
   if (items.length === 0 && step !== 'success') {
@@ -465,12 +485,81 @@ export default function CheckoutPage() {
                 <div>
                   <p className="text-white text-sm font-bold">5% de desconto pagando via PIX</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    De <span className="line-through">{formatPrice(total)}</span>{' '}
+                    De <span className="line-through">{formatPrice(totalWithBump)}</span>{' '}
                     por <span className="text-green-400 font-bold text-sm">{formatPrice(discountedTotal)}</span>
-                    {' '}<span className="text-green-400">(-{formatPrice(discount)})</span>
+                    {' '}<span className="text-green-400">(-{formatPrice(pixDiscount)})</span>
                   </p>
                 </div>
               </div>
+
+              {/* ── ORDER BUMP ────────────────────────────────────────────── */}
+              {BUMP_PRODUCTS.length > 0 && (
+                <div className="border-2 border-dashed border-brand-gold/50 bg-brand-gold/5 p-5 mb-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-brand-gold text-lg">🎁</span>
+                    <div>
+                      <p className="text-xs font-bold text-brand-gold uppercase tracking-widest">Oferta Especial — Adicione ao seu pedido</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Aproveite <span className="text-green-400 font-bold">20% de desconto</span> nos acessórios abaixo, só nessa tela!</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {BUMP_PRODUCTS.map(p => {
+                      const isSelected = bumpSelected.has(p.id);
+                      const discPrice = parseFloat((p.price * (1 - BUMP_DISCOUNT)).toFixed(2));
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => setBumpSelected(prev => {
+                            const next = new Set(prev);
+                            if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                            return next;
+                          })}
+                          className={`flex items-center gap-4 p-3 cursor-pointer transition-all border ${
+                            isSelected
+                              ? 'bg-brand-gold/10 border-brand-gold'
+                              : 'bg-brand-card border-brand-border hover:border-brand-gold/40'
+                          }`}
+                        >
+                          {/* Thumbnail */}
+                          <div className="w-16 h-16 flex-shrink-0 overflow-hidden bg-brand-dark">
+                            <img
+                              src={p.images?.[0]}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-semibold leading-tight">{p.shortName || p.name}</p>
+                            <div className="flex items-baseline gap-2 mt-1">
+                              <span className="text-green-400 font-bold text-sm">{formatPrice(discPrice)}</span>
+                              <span className="text-gray-500 text-xs line-through">{formatPrice(p.price)}</span>
+                              <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 font-bold">-20%</span>
+                            </div>
+                          </div>
+
+                          {/* Checkbox */}
+                          <div className={`w-6 h-6 flex-shrink-0 flex items-center justify-center border-2 transition-all ${
+                            isSelected ? 'bg-brand-gold border-brand-gold' : 'border-gray-600'
+                          }`}>
+                            {isSelected && (
+                              <svg className="w-3.5 h-3.5 text-brand-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/>
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {bumpSelected.size > 0 && (
+                    <p className="text-xs text-green-400 mt-3 text-center font-medium">
+                      + {formatPrice(bumpSubtotal)} adicionado ao seu pedido com 20% OFF!
+                    </p>
+                  )}
+                </div>
+              )}
 
               {payError && (
                 <div className="bg-brand-red/10 border border-brand-red/40 text-brand-red text-sm p-3 mb-4 flex items-center gap-2">
@@ -613,6 +702,18 @@ export default function CheckoutPage() {
                   <span className="text-xs text-white whitespace-nowrap self-start">{formatPrice(item.price * item.quantity)}</span>
                 </div>
               ))}
+              {bumpItems.map(item => (
+                <div key={`bump-${item.id}`} className="flex gap-3 border-t border-brand-gold/20 pt-3">
+                  <div className="w-14 h-14 bg-brand-dark flex-shrink-0 overflow-hidden">
+                    <img src={item.images?.[0]} alt={item.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-white font-medium leading-tight truncate">{item.name}</p>
+                    <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 font-bold">-20% OFF</span>
+                  </div>
+                  <span className="text-xs text-green-400 whitespace-nowrap self-start">{formatPrice(item.price)}</span>
+                </div>
+              ))}
             </div>
 
             <div className="border-t border-brand-border pt-4 space-y-2">
@@ -620,6 +721,12 @@ export default function CheckoutPage() {
                 <span className="text-gray-500">Subtotal</span>
                 <span className="text-white">{formatPrice(subtotal)}</span>
               </div>
+              {bumpSubtotal > 0 && (
+                <div className="flex justify-between text-sm text-green-400">
+                  <span>Acessórios (-20%)</span>
+                  <span>+{formatPrice(bumpSubtotal)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Frete</span>
                 <span className={shipping === 0 ? 'text-brand-gold font-medium' : 'text-white'}>
@@ -629,13 +736,13 @@ export default function CheckoutPage() {
               {(step === 3 || step === 'pix') && (
                 <div className="flex justify-between text-sm text-green-400">
                   <span>Desconto PIX (5%)</span>
-                  <span>-{formatPrice(discount)}</span>
+                  <span>-{formatPrice(pixDiscount)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold pt-3 border-t border-brand-border">
                 <span className="text-white font-heading tracking-wide text-lg">TOTAL</span>
                 <span className="text-brand-gold font-heading text-xl">
-                  {(step === 3 || step === 'pix') ? formatPrice(discountedTotal) : formatPrice(total)}
+                  {(step === 3 || step === 'pix') ? formatPrice(discountedTotal) : formatPrice(totalWithBump)}
                 </span>
               </div>
             </div>
