@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
+import SocialProof from './components/SocialProof';
 import HomePage from './pages/HomePage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
@@ -42,6 +43,7 @@ function Layout({ children }) {
       <CartDrawer />
       <main className="flex-1">{children}</main>
       <Footer />
+      <SocialProof />
     </div>
   );
 }
