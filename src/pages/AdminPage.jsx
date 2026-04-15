@@ -670,29 +670,30 @@ function LinkBadge({ status }) {
 }
 
 function PaymentLinksTab() {
-  const { session } = useAuth();
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ customerName: '', customerEmail: '', customerPhone: '', discountPct: 0, expiresInHours: 48 });
-  const [selectedProducts, setSelectedProducts] = useState([{ productId: '', quantity: 1 }]);
+  // Each row: { mode: 'catalog'|'custom', productId: '', customName: '', customPrice: '', quantity: 1 }
+  const [selectedProducts, setSelectedProducts] = useState([{ mode: 'catalog', productId: '', customName: '', customPrice: '', quantity: 1 }]);
   const [formError, setFormError] = useState('');
 
-  const authHeaders = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session?.access_token}`,
-  });
+  const getAuthHeaders = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` };
+  };
 
   const loadLinks = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch('/api/admin/payment-links', { headers: authHeaders() });
+      const headers = await getAuthHeaders();
+      const r = await fetch('/api/admin/payment-links', { headers });
       const d = await r.json();
       if (d.success) setLinks(d.data);
     } finally { setLoading(false); }
-  }, [session]);
+  }, []);
 
   useEffect(() => { loadLinks(); }, [loadLinks]);
 
@@ -702,34 +703,42 @@ function PaymentLinksTab() {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
+  const updateRow = (idx, patch) =>
+    setSelectedProducts(prev => prev.map((x, i) => i === idx ? { ...x, ...patch } : x));
+
   const handleCreate = async () => {
     setFormError('');
     if (!form.customerName.trim()) { setFormError('Nome do cliente é obrigatório.'); return; }
-    const validProducts = selectedProducts.filter(sp => sp.productId);
-    if (!validProducts.length) { setFormError('Selecione ao menos 1 produto.'); return; }
 
-    const items = validProducts.map(sp => {
-      const p = products.find(x => x.id === parseInt(sp.productId));
-      if (!p) return null;
-      return { id: p.id, name: p.shortName || p.name, price: p.price, quantity: parseInt(sp.quantity) || 1, image: p.images?.[0] || '' };
+    const items = selectedProducts.map(sp => {
+      if (sp.mode === 'catalog') {
+        if (!sp.productId) return null;
+        const p = products.find(x => x.id === parseInt(sp.productId));
+        if (!p) return null;
+        return { id: p.id, name: p.shortName || p.name, price: p.price, quantity: parseInt(sp.quantity) || 1, image: p.images?.[0] || '' };
+      } else {
+        // custom product
+        if (!sp.customName.trim() || !sp.customPrice) return null;
+        return { id: `custom-${Date.now()}`, name: sp.customName.trim(), price: parseFloat(sp.customPrice), quantity: parseInt(sp.quantity) || 1, image: '' };
+      }
     }).filter(Boolean);
 
-    if (!items.length) { setFormError('Produto inválido.'); return; }
+    if (!items.length) { setFormError('Adicione ao menos 1 produto válido.'); return; }
 
     setCreating(true);
     try {
+      const headers = await getAuthHeaders();
       const r = await fetch('/api/admin/payment-links', {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: JSON.stringify({ ...form, items }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
       setShowForm(false);
       setForm({ customerName: '', customerEmail: '', customerPhone: '', discountPct: 0, expiresInHours: 48 });
-      setSelectedProducts([{ productId: '', quantity: 1 }]);
+      setSelectedProducts([{ mode: 'catalog', productId: '', customName: '', customPrice: '', quantity: 1 }]);
       loadLinks();
-      // Auto-copy new link
       setTimeout(() => copyLink(d.token), 300);
     } catch (e) {
       setFormError(e.message);
@@ -739,7 +748,8 @@ function PaymentLinksTab() {
   };
 
   const handleCancel = async (id) => {
-    await fetch('/api/admin/payment-links', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ id, status: 'cancelled' }) });
+    const headers = await getAuthHeaders();
+    await fetch('/api/admin/payment-links', { method: 'PATCH', headers, body: JSON.stringify({ id, status: 'cancelled' }) });
     loadLinks();
   };
 
@@ -802,33 +812,73 @@ function PaymentLinksTab() {
           {/* Products */}
           <div className="mb-4">
             <label className="block text-xs text-gray-400 uppercase tracking-widest mb-2">Produtos <span className="text-brand-gold">*</span></label>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {selectedProducts.map((sp, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <select
-                    value={sp.productId}
-                    onChange={e => setSelectedProducts(prev => prev.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}
-                    className="flex-1 bg-brand-dark border border-brand-border px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-gold"
-                  >
-                    <option value="">— Selecionar produto —</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.shortName || p.name} — R$ {p.price.toFixed(2)}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number" min="1" max="99" value={sp.quantity}
-                    onChange={e => setSelectedProducts(prev => prev.map((x, i) => i === idx ? { ...x, quantity: parseInt(e.target.value) || 1 } : x))}
-                    className="w-16 bg-brand-dark border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
-                  />
-                  {selectedProducts.length > 1 && (
-                    <button onClick={() => setSelectedProducts(prev => prev.filter((_, i) => i !== idx))}
-                      className="text-gray-600 hover:text-brand-red transition-colors px-2">✕</button>
+                <div key={idx} className="bg-brand-dark border border-brand-border p-3">
+                  {/* Mode toggle */}
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      onClick={() => updateRow(idx, { mode: 'catalog', customName: '', customPrice: '' })}
+                      className={`text-xs px-3 py-1 font-bold uppercase tracking-wide transition-all ${sp.mode === 'catalog' ? 'bg-brand-gold text-brand-black' : 'bg-transparent text-gray-500 border border-brand-border hover:text-white'}`}
+                    >Do Catálogo</button>
+                    <button
+                      onClick={() => updateRow(idx, { mode: 'custom', productId: '' })}
+                      className={`text-xs px-3 py-1 font-bold uppercase tracking-wide transition-all ${sp.mode === 'custom' ? 'bg-brand-gold text-brand-black' : 'bg-transparent text-gray-500 border border-brand-border hover:text-white'}`}
+                    >Personalizado</button>
+                    {selectedProducts.length > 1 && (
+                      <button onClick={() => setSelectedProducts(prev => prev.filter((_, i) => i !== idx))}
+                        className="ml-auto text-xs text-gray-600 hover:text-red-400 transition-colors">✕ Remover</button>
+                    )}
+                  </div>
+
+                  {sp.mode === 'catalog' ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={sp.productId}
+                        onChange={e => updateRow(idx, { productId: e.target.value })}
+                        className="flex-1 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-gold"
+                      >
+                        <option value="">— Selecionar produto —</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>{p.shortName || p.name} — R$ {p.price.toFixed(2)}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number" min="1" max="99" value={sp.quantity}
+                        onChange={e => updateRow(idx, { quantity: parseInt(e.target.value) || 1 })}
+                        className="w-16 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
+                        placeholder="Qtd"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        value={sp.customName}
+                        onChange={e => updateRow(idx, { customName: e.target.value })}
+                        placeholder="Nome do produto"
+                        className="flex-1 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold"
+                      />
+                      <input
+                        type="number" min="0.01" step="0.01" value={sp.customPrice}
+                        onChange={e => updateRow(idx, { customPrice: e.target.value })}
+                        placeholder="R$ preço"
+                        className="w-28 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold"
+                      />
+                      <input
+                        type="number" min="1" max="99" value={sp.quantity}
+                        onChange={e => updateRow(idx, { quantity: parseInt(e.target.value) || 1 })}
+                        placeholder="Qtd"
+                        className="w-16 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
                   )}
                 </div>
               ))}
             </div>
-            <button onClick={() => setSelectedProducts(p => [...p, { productId: '', quantity: 1 }])}
-              className="text-xs text-brand-gold hover:underline mt-2 block">+ Adicionar produto</button>
+            <button
+              onClick={() => setSelectedProducts(p => [...p, { mode: 'catalog', productId: '', customName: '', customPrice: '', quantity: 1 }])}
+              className="text-xs text-brand-gold hover:underline mt-2 block"
+            >+ Adicionar produto</button>
           </div>
 
           {formError && <p className="text-xs text-red-400 mb-3">{formError}</p>}
