@@ -61,7 +61,7 @@ export default function Navbar() {
 
             {/* Logo */}
             <Link to="/" className="flex items-center">
-              <img src={logoSrc} alt="ClickRaid" className="h-10 w-auto object-contain" />
+              <img src={logoSrc} alt="ClickRaid" className="h-14 w-auto object-contain" />
             </Link>
 
             {/* Desktop Nav */}
