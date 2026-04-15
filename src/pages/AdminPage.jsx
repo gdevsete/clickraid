@@ -203,6 +203,7 @@ export default function AdminPage() {
     { id: 'pedidos',   icon: '📦', label: 'Pedidos' },
     { id: 'clientes',  icon: '👥', label: 'Clientes' },
     { id: 'produtos',  icon: '🔫', label: 'Produtos' },
+    { id: 'links',     icon: '🔗', label: 'Links de Venda' },
   ];
 
   return (
@@ -548,6 +549,9 @@ export default function AdminPage() {
           {/* ══ PRODUTOS ═════════════════════════════════════════════════ */}
           {tab === 'produtos' && <ProductsAdminTab />}
 
+          {/* ══ LINKS DE VENDA ═══════════════════════════════════════════ */}
+          {tab === 'links' && <PaymentLinksTab />}
+
         </div>
       </main>
     </div>
@@ -651,3 +655,259 @@ function ProductsAdminTab() {
     </div>
   );
 }
+
+// ─── Payment Links Tab ────────────────────────────────────────────────────────
+const LINK_STATUS = {
+  pending:   { label: 'Aguardando', bg: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+  paid:      { label: 'Pago',       bg: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  cancelled: { label: 'Cancelado',  bg: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  expired:   { label: 'Expirado',   bg: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
+};
+
+function LinkBadge({ status }) {
+  const c = LINK_STATUS[status] || LINK_STATUS.pending;
+  return <span className={`text-xs px-2 py-0.5 border font-medium rounded-sm ${c.bg}`}>{c.label}</span>;
+}
+
+function PaymentLinksTab() {
+  const { session } = useAuth();
+  const [links, setLinks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ customerName: '', customerEmail: '', customerPhone: '', discountPct: 0, expiresInHours: 48 });
+  const [selectedProducts, setSelectedProducts] = useState([{ productId: '', quantity: 1 }]);
+  const [formError, setFormError] = useState('');
+
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session?.access_token}`,
+  });
+
+  const loadLinks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/admin/payment-links', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.success) setLinks(d.data);
+    } finally { setLoading(false); }
+  }, [session]);
+
+  useEffect(() => { loadLinks(); }, [loadLinks]);
+
+  const copyLink = (token) => {
+    navigator.clipboard.writeText(`https://www.clickraidofc.com.br/p/${token}`);
+    setCopiedId(token);
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleCreate = async () => {
+    setFormError('');
+    if (!form.customerName.trim()) { setFormError('Nome do cliente é obrigatório.'); return; }
+    const validProducts = selectedProducts.filter(sp => sp.productId);
+    if (!validProducts.length) { setFormError('Selecione ao menos 1 produto.'); return; }
+
+    const items = validProducts.map(sp => {
+      const p = products.find(x => x.id === parseInt(sp.productId));
+      if (!p) return null;
+      return { id: p.id, name: p.shortName || p.name, price: p.price, quantity: parseInt(sp.quantity) || 1, image: p.images?.[0] || '' };
+    }).filter(Boolean);
+
+    if (!items.length) { setFormError('Produto inválido.'); return; }
+
+    setCreating(true);
+    try {
+      const r = await fetch('/api/admin/payment-links', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ ...form, items }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      setShowForm(false);
+      setForm({ customerName: '', customerEmail: '', customerPhone: '', discountPct: 0, expiresInHours: 48 });
+      setSelectedProducts([{ productId: '', quantity: 1 }]);
+      loadLinks();
+      // Auto-copy new link
+      setTimeout(() => copyLink(d.token), 300);
+    } catch (e) {
+      setFormError(e.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCancel = async (id) => {
+    await fetch('/api/admin/payment-links', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ id, status: 'cancelled' }) });
+    loadLinks();
+  };
+
+  const totalAmount = (items, discountPct) => {
+    const base = (items || []).reduce((s, i) => s + i.price * i.quantity, 0);
+    return base * (1 - (discountPct || 0) / 100) * 0.95;
+  };
+
+  return (
+    <div className="animate-fade-in">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-heading text-3xl text-white">LINKS DE VENDA</h1>
+          <p className="text-gray-600 text-sm">Crie links personalizados para vendas manuais</p>
+        </div>
+        <button onClick={() => setShowForm(s => !s)} className="btn-primary px-6 py-3 text-sm">
+          {showForm ? '✕ Fechar' : '+ Novo Link'}
+        </button>
+      </div>
+
+      {/* ── Create Form ──────────────────────────────────────────────────── */}
+      {showForm && (
+        <div className="bg-[#111] border border-brand-gold/30 p-6 mb-8 animate-fade-in">
+          <h3 className="font-heading text-lg text-brand-gold tracking-wide mb-5">CRIAR NOVO LINK</h3>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="col-span-2 md:col-span-1">
+              <label className="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">Nome do Cliente <span className="text-brand-gold">*</span></label>
+              <input value={form.customerName} onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} placeholder="João da Silva"
+                className="w-full bg-brand-dark border border-brand-border px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold" />
+            </div>
+            <div className="col-span-2 md:col-span-1">
+              <label className="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">E-mail (opcional)</label>
+              <input type="email" value={form.customerEmail} onChange={e => setForm(f => ({ ...f, customerEmail: e.target.value }))} placeholder="joao@email.com"
+                className="w-full bg-brand-dark border border-brand-border px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">WhatsApp (opcional)</label>
+              <input value={form.customerPhone} onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))} placeholder="(11) 99999-9999"
+                className="w-full bg-brand-dark border border-brand-border px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">Desconto Extra %</label>
+                <input type="number" min="0" max="80" value={form.discountPct} onChange={e => setForm(f => ({ ...f, discountPct: parseInt(e.target.value) || 0 }))}
+                  className="w-full bg-brand-dark border border-brand-border px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-gold" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">Expira em (horas)</label>
+                <select value={form.expiresInHours} onChange={e => setForm(f => ({ ...f, expiresInHours: parseInt(e.target.value) }))}
+                  className="w-full bg-brand-dark border border-brand-border px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-gold">
+                  <option value={24}>24 horas</option>
+                  <option value={48}>48 horas</option>
+                  <option value={72}>72 horas</option>
+                  <option value={168}>7 dias</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Products */}
+          <div className="mb-4">
+            <label className="block text-xs text-gray-400 uppercase tracking-widest mb-2">Produtos <span className="text-brand-gold">*</span></label>
+            <div className="space-y-2">
+              {selectedProducts.map((sp, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <select
+                    value={sp.productId}
+                    onChange={e => setSelectedProducts(prev => prev.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}
+                    className="flex-1 bg-brand-dark border border-brand-border px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-gold"
+                  >
+                    <option value="">— Selecionar produto —</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.shortName || p.name} — R$ {p.price.toFixed(2)}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number" min="1" max="99" value={sp.quantity}
+                    onChange={e => setSelectedProducts(prev => prev.map((x, i) => i === idx ? { ...x, quantity: parseInt(e.target.value) || 1 } : x))}
+                    className="w-16 bg-brand-dark border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
+                  />
+                  {selectedProducts.length > 1 && (
+                    <button onClick={() => setSelectedProducts(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-gray-600 hover:text-brand-red transition-colors px-2">✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setSelectedProducts(p => [...p, { productId: '', quantity: 1 }])}
+              className="text-xs text-brand-gold hover:underline mt-2 block">+ Adicionar produto</button>
+          </div>
+
+          {formError && <p className="text-xs text-red-400 mb-3">{formError}</p>}
+
+          <div className="flex gap-3">
+            <button onClick={handleCreate} disabled={creating}
+              className="btn-primary px-8 py-3 flex items-center gap-2">
+              {creating ? <><div className="w-4 h-4 border-2 border-brand-black border-t-transparent rounded-full animate-spin" /> Criando...</> : '🔗 Gerar Link'}
+            </button>
+            <button onClick={() => setShowForm(false)} className="btn-dark px-6 py-3 text-sm">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Links Table ──────────────────────────────────────────────────── */}
+      {loading ? <Spinner /> : links.length === 0 ? (
+        <div className="text-center py-16 text-gray-600">
+          <div className="text-4xl mb-3">🔗</div>
+          <p>Nenhum link criado ainda. Clique em "Novo Link" para começar.</p>
+        </div>
+      ) : (
+        <div className="bg-[#111] border border-brand-border">
+          <div className="grid grid-cols-12 px-4 py-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest border-b border-brand-border">
+            <div className="col-span-3">Cliente</div>
+            <div className="col-span-3">Produtos</div>
+            <div className="col-span-2">Valor PIX</div>
+            <div className="col-span-1">Status</div>
+            <div className="col-span-1">Expira</div>
+            <div className="col-span-2 text-right">Ações</div>
+          </div>
+          {links.map(link => {
+            const val = totalAmount(link.items, link.discount_pct);
+            const isExpired = link.expires_at && new Date(link.expires_at) < new Date() && link.status === 'pending';
+            const statusDisplay = isExpired ? 'expired' : link.status;
+            return (
+              <div key={link.id} className="grid grid-cols-12 px-4 py-4 items-center border-b border-brand-border last:border-0 hover:bg-white/5 transition-colors">
+                <div className="col-span-3">
+                  <p className="text-sm text-white font-medium">{link.customer_name}</p>
+                  {link.customer_email && <p className="text-xs text-gray-600 truncate">{link.customer_email}</p>}
+                </div>
+                <div className="col-span-3">
+                  {(link.items || []).slice(0, 2).map((i, idx) => (
+                    <p key={idx} className="text-xs text-gray-400 truncate">{i.name} ×{i.quantity}</p>
+                  ))}
+                  {link.items?.length > 2 && <p className="text-xs text-gray-600">+{link.items.length - 2} mais</p>}
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm text-brand-gold font-bold">{fmt(val)}</p>
+                  {link.discount_pct > 0 && <p className="text-xs text-green-400">-{link.discount_pct}% extra</p>}
+                </div>
+                <div className="col-span-1"><LinkBadge status={statusDisplay} /></div>
+                <div className="col-span-1">
+                  <p className="text-xs text-gray-600">{link.expires_at ? fmtShort(link.expires_at) : '—'}</p>
+                </div>
+                <div className="col-span-2 flex gap-2 justify-end">
+                  {(link.status === 'pending' && !isExpired) && (
+                    <>
+                      <button
+                        onClick={() => copyLink(link.token)}
+                        className={`text-xs px-3 py-1.5 font-bold uppercase tracking-wide transition-all ${copiedId === link.token ? 'bg-green-500 text-white' : 'bg-brand-gold text-brand-black hover:bg-brand-gold-light'}`}
+                      >
+                        {copiedId === link.token ? '✓ Copiado' : 'Copiar'}
+                      </button>
+                      <button onClick={() => handleCancel(link.id)} className="text-xs text-gray-600 hover:text-red-400 transition-colors px-1">✕</button>
+                    </>
+                  )}
+                  {(link.status === 'paid') && (
+                    <span className="text-xs text-green-400 font-medium">✓ Pago</span>
+                  )}
+                  {(link.status === 'cancelled' || link.status === 'expired' || isExpired) && (
+                    <span className="text-xs text-gray-600">Inativo</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+

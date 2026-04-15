@@ -19,6 +19,7 @@ import TrocasPage from './pages/TrocasPage';
 import LoginPage from './pages/LoginPage';
 import AccountPage from './pages/AccountPage';
 import AdminPage from './pages/AdminPage';
+import ExternalCheckoutPage from './pages/ExternalCheckoutPage';
 import { pixelPageView } from './lib/pixel';
 
 const PIXEL_ID = import.meta.env.VITE_FB_PIXEL_ID;
@@ -95,6 +96,7 @@ export default function App() {
                   <Route path="/trocas" element={<TrocasPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/minha-conta" element={<AccountPage />} />
+                  <Route path="/p/:token" element={<ExternalCheckoutPage />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Layout>
