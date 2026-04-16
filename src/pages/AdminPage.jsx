@@ -151,6 +151,7 @@ export default function AdminPage() {
   const [updatingOrder, setUpdatingOrder] = useState(null);
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [checkingStatus, setCheckingStatus] = useState(null);
+  const [syncingGateway, setSyncingGateway] = useState(false);
 
   // Customers
   const [customers, setCustomers] = useState([]);
@@ -286,6 +287,25 @@ export default function AdminPage() {
       alert('Erro ao consultar gateway');
     } finally {
       setCheckingStatus(null);
+    }
+  };
+
+  const syncGateway = async () => {
+    setSyncingGateway(true);
+    try {
+      const result = await apiFetch('/api/admin/sync-gateway', { method: 'POST' });
+      if (result.error) {
+        alert(`Erro: ${result.error}`);
+      } else {
+        alert(`${result.message}\n${result.errors ? `(${result.errors} erros)` : ''}`);
+        // Refresh orders list
+        const d = await apiFetch('/api/admin/orders?limit=100');
+        if (d.success) setOrders(d.data || []);
+      }
+    } catch {
+      alert('Erro ao sincronizar com a gateway');
+    } finally {
+      setSyncingGateway(false);
     }
   };
 
@@ -495,6 +515,13 @@ export default function AdminPage() {
                   <p className="text-gray-600 text-sm">{filteredOrders.length} resultado{filteredOrders.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={syncGateway}
+                    disabled={syncingGateway}
+                    className="text-xs border border-blue-500/50 text-blue-400 hover:border-blue-400 hover:text-blue-300 px-3 py-2 transition-colors disabled:opacity-40"
+                  >
+                    {syncingGateway ? '⏳ Sincronizando...' : '🔄 Sincronizar Gateway'}
+                  </button>
                   <button onClick={exportCSV} className="text-xs border border-brand-border text-gray-400 hover:text-white px-3 py-2 transition-colors">
                     ↓ Exportar CSV
                   </button>
