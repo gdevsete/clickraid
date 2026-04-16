@@ -30,12 +30,21 @@ export default async function handler(req, res) {
       ? await sb.from('profiles').select('id, full_name, phone, cpf, address').in('id', userIds)
       : { data: [] };
 
+    // Fetch emails from auth.users via admin API
+    const emailMap = {};
+    if (userIds.length) {
+      try {
+        const { data: { users } } = await sb.auth.admin.listUsers({ perPage: 1000 });
+        (users || []).forEach(u => { emailMap[u.id] = u.email; });
+      } catch {}
+    }
+
     const profileMap = {};
-    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+    (profiles || []).forEach(p => { profileMap[p.id] = { ...p, email: emailMap[p.id] || null }; });
 
     let merged = orders.map(o => ({
       ...o,
-      profiles: profileMap[o.user_id] || null,
+      profiles: profileMap[o.user_id] || (o.user_id && emailMap[o.user_id] ? { email: emailMap[o.user_id] } : null),
     }));
 
     // Search filter

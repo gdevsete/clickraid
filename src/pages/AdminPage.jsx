@@ -150,6 +150,7 @@ export default function AdminPage() {
   const [orderSearch, setOrderSearch] = useState('');
   const [updatingOrder, setUpdatingOrder] = useState(null);
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [checkingStatus, setCheckingStatus] = useState(null);
 
   // Customers
   const [customers, setCustomers] = useState([]);
@@ -265,6 +266,27 @@ export default function AdminPage() {
       setStats(prev => ({ ...prev })); // trigger re-render
     }
     setUpdatingOrder(null);
+  };
+
+  const checkGatewayStatus = async (order) => {
+    if (!order.transaction_id) return;
+    setCheckingStatus(order.id);
+    try {
+      const res = await fetch(`/api/payment-status?transactionId=${order.transaction_id}`);
+      const data = await res.json();
+      // Black Cat Pay: data.data.status === 'PAID' | 'PENDING' | 'FAILED' | 'EXPIRED'
+      const gwStatus = (data?.data?.status || data?.status || '').toUpperCase();
+      if (gwStatus === 'PAID') {
+        await updateOrderStatus(order.id, 'paid');
+      } else {
+        const labels = { PENDING: 'Aguardando', FAILED: 'Falhou', EXPIRED: 'Expirado', CANCELLED: 'Cancelado' };
+        alert(`Status na gateway: ${labels[gwStatus] || gwStatus || 'desconhecido'}`);
+      }
+    } catch {
+      alert('Erro ao consultar gateway');
+    } finally {
+      setCheckingStatus(null);
+    }
   };
 
   const exportCSV = () => {
@@ -544,18 +566,32 @@ export default function AdminPage() {
                               {/* Customer info */}
                               <div>
                                 <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-2">Cliente</p>
-                                <p className="text-xs text-white">{o.profiles?.full_name || '—'}</p>
-                                <p className="text-xs text-gray-500">{o.profiles?.phone || '—'}</p>
+                                <p className="text-xs text-white font-medium">{o.profiles?.full_name || '—'}</p>
+                                {o.profiles?.email && (
+                                  <p className="text-xs text-brand-gold/80 mt-0.5">{o.profiles.email}</p>
+                                )}
+                                <p className="text-xs text-gray-500 mt-0.5">{o.profiles?.phone || '—'}</p>
                                 <p className="text-xs text-gray-500">{o.profiles?.cpf || '—'}</p>
                                 {o.profiles?.address && (
                                   <p className="text-xs text-gray-600 mt-1">
-                                    {o.profiles.address.rua}, {o.profiles.address.numero} · {o.profiles.address.cidade}/{o.profiles.address.estado}
+                                    {[o.profiles.address.rua, o.profiles.address.numero, o.profiles.address.complemento].filter(Boolean).join(', ')}
+                                    {o.profiles.address.bairro ? ` · ${o.profiles.address.bairro}` : ''}
+                                    {' · '}{o.profiles.address.cidade}/{o.profiles.address.estado}
+                                    {o.profiles.address.cep ? ` · CEP ${o.profiles.address.cep}` : ''}
                                   </p>
                                 )}
                               </div>
                             </div>
 
-                            {/* Status update */}
+                            {/* Transaction ID */}
+                            {o.transaction_id && (
+                              <div className="mt-3">
+                                <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-1">ID da Transação</p>
+                                <p className="text-xs font-mono text-gray-400 break-all">{o.transaction_id}</p>
+                              </div>
+                            )}
+
+                            {/* Status update + gateway check */}
                             <div className="mt-4 flex items-center gap-2 flex-wrap">
                               <p className="text-[10px] uppercase tracking-widest text-gray-600">Alterar status:</p>
                               {['paid', 'shipped', 'delivered', 'cancelled'].map(s => (
@@ -572,6 +608,15 @@ export default function AdminPage() {
                                   {updatingOrder === o.id ? '...' : STATUS_CONFIG[s]?.label}
                                 </button>
                               ))}
+                              {o.transaction_id && o.status === 'pending' && (
+                                <button
+                                  onClick={() => checkGatewayStatus(o)}
+                                  disabled={checkingStatus === o.id}
+                                  className="text-xs px-3 py-1.5 border border-blue-500/50 text-blue-400 hover:border-blue-400 hover:text-blue-300 transition-colors disabled:opacity-40 ml-2"
+                                >
+                                  {checkingStatus === o.id ? '⏳ Verificando...' : '🔄 Verificar Pagamento'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
