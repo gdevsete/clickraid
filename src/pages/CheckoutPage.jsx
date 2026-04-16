@@ -229,14 +229,32 @@ export default function CheckoutPage() {
         copyPaste,
         expiresAt: pd.expiresAt,
       });
-      setTransactionId(data.data.transactionId);
+      const txId = data.data.transactionId;
+      setTransactionId(txId);
       // Snapshot inclui id (para content_ids no Pixel) + bump items
       itemsSnapshotRef.current = [
         ...items.map(i => ({ id: i.id, name: i.shortName || i.name, price: i.price, quantity: i.quantity })),
         ...bumpItems.map(i => ({ id: i.id, name: i.name, price: i.price, quantity: 1 })),
       ];
+      // Salvar pedido pendente imediatamente para aparecer no admin
+      fetch('/api/save-pending-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: txId,
+          items: itemsSnapshotRef.current,
+          amount: totalWithBump * 0.95,
+          customerData: {
+            name: form.nome,
+            email: form.email,
+            phone: form.telefone,
+            cpf: form.cpf,
+            address: { rua: form.rua, numero: form.numero, complemento: form.complemento, bairro: form.bairro, cidade: form.cidade, estado: form.estado, cep: form.cep },
+          },
+        }),
+      }).catch(() => {});
       setStep('pix');
-      startPolling(data.data.transactionId, itemsSnapshotRef.current);
+      startPolling(txId, itemsSnapshotRef.current);
     } catch (err) {
       setPayError(err.message);
     } finally {

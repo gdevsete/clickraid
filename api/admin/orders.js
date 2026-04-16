@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
     let query = sb
       .from('orders')
-      .select('*')
+      .select('*, customer_data')
       .order('created_at', { ascending: false })
       .range(Number(offset), Number(offset) + Number(limit) - 1);
 
@@ -42,17 +42,29 @@ export default async function handler(req, res) {
     const profileMap = {};
     (profiles || []).forEach(p => { profileMap[p.id] = { ...p, email: emailMap[p.id] || null }; });
 
-    let merged = orders.map(o => ({
-      ...o,
-      profiles: profileMap[o.user_id] || (o.user_id && emailMap[o.user_id] ? { email: emailMap[o.user_id] } : null),
-    }));
+    let merged = orders.map(o => {
+      // Priority: linked profile > customer_data from PIX generation
+      let profiles = profileMap[o.user_id] || (o.user_id && emailMap[o.user_id] ? { email: emailMap[o.user_id] } : null);
+      if (!profiles && o.customer_data) {
+        profiles = {
+          full_name: o.customer_data.name,
+          email: o.customer_data.email,
+          phone: o.customer_data.phone,
+          cpf: o.customer_data.cpf,
+          address: o.customer_data.address,
+        };
+      }
+      return { ...o, profiles };
+    });
 
     // Search filter
     if (search) {
       const q = search.toLowerCase();
       merged = merged.filter(o =>
         o.transaction_id?.toLowerCase().includes(q) ||
-        o.profiles?.full_name?.toLowerCase().includes(q)
+        o.profiles?.full_name?.toLowerCase().includes(q) ||
+        o.profiles?.email?.toLowerCase().includes(q) ||
+        o.profiles?.phone?.includes(q)
       );
     }
 

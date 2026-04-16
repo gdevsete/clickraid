@@ -248,9 +248,27 @@ export default function ExternalCheckoutPage() {
       const qrCodeUrl = rawQr
         ? (rawQr.startsWith('data:') ? rawQr : `data:image/png;base64,${rawQr}`)
         : `https://api.qrserver.com/v1/create-qr-code/?size=224x224&data=${encodeURIComponent(copyPaste)}`;
-      setPixData({ qrCodeUrl, copyPaste, transactionId: data.data.transactionId });
+      const txId = data.data.transactionId;
+      setPixData({ qrCodeUrl, copyPaste, transactionId: txId });
+      // Salvar pedido pendente imediatamente para aparecer no admin
+      fetch('/api/save-pending-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: txId,
+          items: items.map(i => ({ name: i.name, price: parseFloat((i.price * (1 - discount_pct / 100)).toFixed(2)), quantity: i.quantity })),
+          amount: afterDiscount,
+          customerData: {
+            name: customer_name,
+            email: form.email,
+            phone: form.telefone,
+            cpf: form.cpf,
+            address: { rua: form.rua, numero: form.numero, complemento: form.complemento, bairro: form.bairro, cidade: form.cidade, estado: form.estado, cep: form.cep },
+          },
+        }),
+      }).catch(() => {});
       setStep('pix');
-      startPolling(data.data.transactionId);
+      startPolling(txId);
       pixelInitiateCheckout({ total: finalTotal, numItems: items.reduce((s, i) => s + i.quantity, 0), contentIds: items.map(i => i.id) });
     } catch (err) {
       setPayError(err.message);

@@ -55,16 +55,33 @@ export default async function handler(req, res) {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id' });
 
-      // Save order
+      // Save order — update existing pending order or insert new
       if (transactionId) {
-        await supabase.from('orders').upsert({
-          user_id: userId,
-          transaction_id: transactionId,
-          items: orderItems || [],
-          amount: Math.round((total || 0) * 100),
-          status: 'paid',
-          created_at: new Date().toISOString(),
-        }, { onConflict: 'transaction_id' });
+        const { data: existing } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('transaction_id', transactionId)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase.from('orders')
+            .update({
+              user_id: userId,
+              status: 'paid',
+              items: orderItems || [],
+              amount: Math.round((total || 0) * 100),
+            })
+            .eq('transaction_id', transactionId);
+        } else {
+          await supabase.from('orders').insert({
+            user_id: userId,
+            transaction_id: transactionId,
+            items: orderItems || [],
+            amount: Math.round((total || 0) * 100),
+            status: 'paid',
+            created_at: new Date().toISOString(),
+          });
+        }
       }
     }
 
