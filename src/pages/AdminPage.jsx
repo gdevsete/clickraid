@@ -290,15 +290,18 @@ export default function AdminPage() {
     }
   };
 
-  const syncGateway = async () => {
+  const syncGateway = async (transactionId = null) => {
     setSyncingGateway(true);
     try {
-      const result = await apiFetch('/api/admin/sync-gateway', { method: 'POST' });
+      const body = transactionId ? { transactionId } : {};
+      const result = await apiFetch('/api/admin/sync-gateway', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
       if (result.error) {
         alert(`Erro: ${result.error}`);
       } else {
-        alert(`${result.message}\n${result.errors ? `(${result.errors} erros)` : ''}`);
-        // Refresh orders list
+        alert(result.message);
         const d = await apiFetch('/api/admin/orders?limit=100');
         if (d.success) setOrders(d.data || []);
       }
@@ -545,6 +548,33 @@ export default function AdminPage() {
                   placeholder="Buscar por ID ou cliente..."
                   className="ml-auto text-xs bg-[#111] border border-brand-border text-white px-3 py-1.5 focus:outline-none focus:border-brand-gold w-56"
                 />
+              </div>
+
+              {/* Importar por ID */}
+              <div className="mb-4 flex gap-2 items-center">
+                <input
+                  id="import-txid"
+                  type="text"
+                  placeholder="Importar por ID de transação (ex: TRX123...)"
+                  className="text-xs bg-[#111] border border-brand-border text-white px-3 py-2 focus:outline-none focus:border-blue-500 flex-1 max-w-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target.value.trim()) {
+                      syncGateway(e.target.value.trim());
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('import-txid');
+                    if (el?.value?.trim()) { syncGateway(el.value.trim()); el.value = ''; }
+                  }}
+                  disabled={syncingGateway}
+                  className="text-xs border border-blue-500/50 text-blue-400 hover:border-blue-400 px-3 py-2 transition-colors disabled:opacity-40"
+                >
+                  {syncingGateway ? '⏳' : '↓ Importar'}
+                </button>
+                <span className="text-[10px] text-gray-600">Cole o ID da transação da gateway para importar um pedido específico</span>
               </div>
 
               {ordersLoading ? <Spinner /> : (

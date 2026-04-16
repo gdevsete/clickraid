@@ -10,17 +10,72 @@ export default async function handler(req, res) {
   const apiKey = process.env.BLACKCAT_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key não configurada' });
 
-  try {
-    // Buscar vendas da Black Cat Pay (tenta com paginação)
-    const gwRes = await fetch('https://api.blackcatpay.com.br/api/sales?page=1&limit=100', {
-      headers: { 'X-API-Key': apiKey },
-    });
+  // Se veio um transactionId específico, buscar apenas aquele
+  const { transactionId: singleTxId } = req.body || {};
+  if (singleTxId) {
+    try {
+      const r = await fetch(`https://api.blackcatpay.com.br/api/sales/${singleTxId}/status`, {
+        headers: { 'X-API-Key': apiKey },
+      });
+      const d = await r.json();
+      if (!r.ok) return res.status(r.status).json({ error: `Gateway retornou ${r.status}` });
 
-    if (!gwRes.ok) {
-      return res.status(gwRes.status).json({ error: `Gateway retornou ${gwRes.status}` });
+      const status = (d.data?.status || d.status || '').toUpperCase();
+      const mappedStatus = status === 'PAID' ? 'paid' : status === 'CANCELLED' || status === 'FAILED' || status === 'EXPIRED' ? 'cancelled' : 'pending';
+      const sale = d.data || d;
+      const customer = sale.customer || {};
+      const customerData = {
+        name: customer.name || null,
+        email: customer.email || null,
+        phone: customer.phone || null,
+        cpf: customer.document?.number || null,
+        address: sale.shipping ? {
+          rua: sale.shipping.street, numero: sale.shipping.number,
+          bairro: sale.shipping.neighborhood, cidade: sale.shipping.city,
+          estado: sale.shipping.state, cep: sale.shipping.zipCode,
+        } : null,
+      };
+      const items = (sale.items || []).map(i => ({ name: i.title || i.name, price: (i.unitPrice || 0) / 100, quantity: i.quantity || 1 }));
+      await sb.from('orders').upsert({
+        transaction_id: singleTxId,
+        items,
+        amount: sale.amount || 0,
+        status: mappedStatus,
+        customer_data: customerData,
+        created_at: sale.createdAt || new Date().toISOString(),
+      }, { onConflict: 'transaction_id', ignoreDuplicates: false });
+      return res.status(200).json({ success: true, synced: 1, message: `Pedido ${singleTxId} importado como "${mappedStatus}"` });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  try {
+    // Tentar endpoints conhecidos para listar vendas
+    const endpoints = [
+      'https://api.blackcatpay.com.br/api/sales?page=1&limit=100',
+      'https://api.blackcatpay.com.br/api/sales/list?page=1&limit=100',
+      'https://api.blackcatpay.com.br/api/transactions?page=1&limit=100',
+      'https://api.blackcatpay.com.br/api/v1/sales?page=1&limit=100',
+    ];
+
+    let gwData = null;
+    let lastStatus = null;
+
+    for (const url of endpoints) {
+      const gwRes = await fetch(url, { headers: { 'X-API-Key': apiKey } });
+      lastStatus = gwRes.status;
+      if (gwRes.ok) {
+        gwData = await gwRes.json();
+        break;
+      }
     }
 
-    const gwData = await gwRes.json();
+    if (!gwData) {
+      return res.status(404).json({
+        error: `Nenhum endpoint de listagem funcionou (último status: ${lastStatus}). Verifique a documentação da Black Cat Pay e informe a URL correta.`,
+      });
+    }
 
     // A API pode retornar { data: [...] } ou { sales: [...] } ou array direto
     const sales = gwData.data || gwData.sales || gwData.items || (Array.isArray(gwData) ? gwData : []);
