@@ -4,9 +4,28 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
 // ─── Audio Engine ─────────────────────────────────────────────────────────────
+// Shared AudioContext — must be created/resumed after a user gesture
+let _audioCtx = null;
+
+function getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+// Call this once on any user click to unlock audio
+function unlockAudio() {
+  try { getAudioCtx(); } catch {}
+}
+
 function playSound(type) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') return; // still locked, skip
     if (type === 'new_order') {
       // Dois bips ascendentes — "alguém está chegando"
       [[440, 0], [660, 0.18]].forEach(([freq, when]) => {
@@ -138,6 +157,7 @@ export default function AdminPage() {
   const [profile, setProfile] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState('dashboard');
+  const tabRef = useRef('dashboard');
 
   // Stats
   const [stats, setStats] = useState(null);
@@ -184,37 +204,48 @@ export default function AdminPage() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
   };
 
-  // Poll orders every 12s to detect new PIX and payments
+  // Poll orders every 8s to detect new PIX and payments
   useEffect(() => {
     if (!authChecked) return;
     const poll = async () => {
       try {
-        const d = await apiFetch('/api/admin/orders?limit=50');
+        const d = await apiFetch('/api/admin/orders?limit=100');
         if (!d.success || !d.data) return;
-        const orders = d.data;
+        const freshOrders = d.data;
+
+        let hasChanges = false;
+
         if (knownOrders.current === null) {
-          // First fetch — just seed, don't notify
+          // First fetch — seed without notifying
           knownOrders.current = {};
-          orders.forEach(o => { knownOrders.current[o.id] = o.status; });
-          return;
+          freshOrders.forEach(o => { knownOrders.current[o.id] = o.status; });
+        } else {
+          freshOrders.forEach(o => {
+            const prev = knownOrders.current[o.id];
+            const name = o.profiles?.full_name || o.customer_data?.name || 'Cliente';
+            const amount = fmt(o.amount);
+            if (prev === undefined) {
+              pushToast('new_order', name, amount);
+              hasChanges = true;
+            } else if (prev !== 'paid' && o.status === 'paid') {
+              pushToast('payment', name, amount);
+              hasChanges = true;
+            }
+            knownOrders.current[o.id] = o.status;
+          });
         }
-        orders.forEach(o => {
-          const prev = knownOrders.current[o.id];
-          const name = o.profiles?.full_name || 'Cliente';
-          const amount = fmt(o.amount);
-          if (prev === undefined) {
-            // Brand new order (PIX gerado)
-            pushToast('new_order', name, amount);
-          } else if (prev !== 'paid' && o.status === 'paid') {
-            // Just paid
-            pushToast('payment', name, amount);
-          }
-          knownOrders.current[o.id] = o.status;
-        });
+
+        // Always update orders list so UI stays fresh
+        if (tabRef.current === 'pedidos') {
+          setOrders(freshOrders);
+        } else if (hasChanges) {
+          // Even if not on orders tab, store so tab loads fresh when opened
+          setOrders(freshOrders);
+        }
       } catch {}
     };
     poll();
-    const interval = setInterval(poll, 12000);
+    const interval = setInterval(poll, 8000);
     return () => clearInterval(interval);
   }, [authChecked]);
 
@@ -372,7 +403,7 @@ export default function AdminPage() {
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => { setTab(t.id); tabRef.current = t.id; unlockAudio(); }}
               className={`w-full flex items-center gap-3 px-5 py-3 text-sm transition-colors text-left ${
                 tab === t.id
                   ? 'bg-brand-gold/10 text-brand-gold border-r-2 border-brand-gold font-medium'
@@ -487,7 +518,7 @@ export default function AdminPage() {
                   <div className="bg-[#111] border border-brand-border rounded">
                     <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between">
                       <p className="text-sm font-bold text-white uppercase tracking-widest">Pedidos Recentes</p>
-                      <button onClick={() => setTab('pedidos')} className="text-xs text-brand-gold hover:underline">Ver todos →</button>
+                      <button onClick={() => { setTab('pedidos'); tabRef.current = 'pedidos'; }} className="text-xs text-brand-gold hover:underline">Ver todos →</button>
                     </div>
                     <div className="divide-y divide-brand-border">
                       {stats.recentOrders.map(o => (
