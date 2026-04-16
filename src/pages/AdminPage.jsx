@@ -1,7 +1,68 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+
+// ─── Audio Engine ─────────────────────────────────────────────────────────────
+function playSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (type === 'new_order') {
+      // Dois bips ascendentes — "alguém está chegando"
+      [[440, 0], [660, 0.18]].forEach(([freq, when]) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + when);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + 0.22);
+        osc.start(ctx.currentTime + when);
+        osc.stop(ctx.currentTime + when + 0.22);
+      });
+    } else if (type === 'payment') {
+      // Fanfarra de 4 notas ascendentes — "dinheiro na conta!"
+      [[523, 0], [659, 0.13], [784, 0.26], [1047, 0.39]].forEach(([freq, when]) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'triangle'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + when);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + 0.35);
+        osc.start(ctx.currentTime + when);
+        osc.stop(ctx.currentTime + when + 0.35);
+      });
+    }
+  } catch {}
+}
+
+// ─── Toast Notification ───────────────────────────────────────────────────────
+function AdminToast({ notifications }) {
+  return (
+    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+      {notifications.map(n => (
+        <div
+          key={n.id}
+          className={`flex items-start gap-3 px-4 py-3 shadow-2xl border min-w-[280px] max-w-xs animate-fade-in pointer-events-auto transition-all ${
+            n.type === 'payment'
+              ? 'bg-green-900/95 border-green-500/60'
+              : 'bg-[#1a1500]/95 border-brand-gold/60'
+          }`}
+        >
+          <span className="text-2xl flex-shrink-0 mt-0.5">{n.type === 'payment' ? '💰' : '🔔'}</span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-bold ${n.type === 'payment' ? 'text-green-300' : 'text-brand-gold'}`}>
+              {n.type === 'payment' ? 'PIX PAGO!' : 'Novo PIX Gerado'}
+            </p>
+            <p className="text-white text-xs mt-0.5 truncate">{n.name}</p>
+            <p className={`text-xs font-bold mt-0.5 ${n.type === 'payment' ? 'text-green-400' : 'text-brand-gold'}`}>
+              {n.amount}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (v) => (v / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -110,6 +171,51 @@ export default function AdminPage() {
     return res.json();
   }, []);
 
+  // Notifications
+  const [toasts, setToasts] = useState([]);
+  const knownOrders = useRef(null); // null = first load
+
+  const pushToast = (type, name, amount) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, type, name, amount }]);
+    playSound(type);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
+  };
+
+  // Poll orders every 12s to detect new PIX and payments
+  useEffect(() => {
+    if (!authChecked) return;
+    const poll = async () => {
+      try {
+        const d = await apiFetch('/api/admin/orders?limit=50');
+        if (!d.success || !d.data) return;
+        const orders = d.data;
+        if (knownOrders.current === null) {
+          // First fetch — just seed, don't notify
+          knownOrders.current = {};
+          orders.forEach(o => { knownOrders.current[o.id] = o.status; });
+          return;
+        }
+        orders.forEach(o => {
+          const prev = knownOrders.current[o.id];
+          const name = o.profiles?.full_name || 'Cliente';
+          const amount = fmt(o.amount);
+          if (prev === undefined) {
+            // Brand new order (PIX gerado)
+            pushToast('new_order', name, amount);
+          } else if (prev !== 'paid' && o.status === 'paid') {
+            // Just paid
+            pushToast('payment', name, amount);
+          }
+          knownOrders.current[o.id] = o.status;
+        });
+      } catch {}
+    };
+    poll();
+    const interval = setInterval(poll, 12000);
+    return () => clearInterval(interval);
+  }, [authChecked]);
+
   // Auth check
   useEffect(() => {
     if (loading) return;
@@ -208,6 +314,7 @@ export default function AdminPage() {
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0a]">
+      <AdminToast notifications={toasts} />
 
       {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
       <aside className="w-56 bg-[#111] border-r border-brand-border flex flex-col flex-shrink-0">
