@@ -1,29 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { pixelPurchase, pixelInitiateCheckout } from '../lib/pixel';
+import { isValidDoc, maskDoc, docLabel, getGatewayCPF } from '../lib/docUtils';
 
 const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-const isValidCPF = (cpf) => {
-  const n = cpf.replace(/\D/g, '');
-  if (n.length !== 11 || /^(\d)\1{10}$/.test(n)) return false;
-  let s = 0;
-  for (let i = 0; i < 9; i++) s += parseInt(n[i]) * (10 - i);
-  let r = (s * 10) % 11; if (r >= 10) r = 0;
-  if (r !== parseInt(n[9])) return false;
-  s = 0;
-  for (let i = 0; i < 10; i++) s += parseInt(n[i]) * (11 - i);
-  r = (s * 10) % 11; if (r >= 10) r = 0;
-  return r === parseInt(n[10]);
-};
-
-const maskCPF = (v) => {
-  v = v.replace(/\D/g, '').slice(0, 11);
-  if (v.length > 9) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
-  if (v.length > 6) return v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
-  if (v.length > 3) return v.replace(/(\d{3})(\d{0,3})/, '$1.$2');
-  return v;
-};
 const maskPhone = (v) => {
   v = v.replace(/\D/g, '').slice(0, 11);
   if (v.length > 10) return v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
@@ -223,7 +203,7 @@ export default function ExternalCheckoutPage() {
   };
 
   const handleGeneratePix = async () => {
-    if (!isValidCPF(form.cpf)) { setCpfError('CPF inválido.'); return; }
+    if (!isValidDoc(form.cpf)) { setCpfError('Documento inválido.'); return; }
     if (!form.email) { setPayError('E-mail é obrigatório.'); return; }
     setCpfError(''); setPayError('');
     setCreating(true);
@@ -234,7 +214,7 @@ export default function ExternalCheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: items.map(i => ({ name: i.name, price: parseFloat((i.price * (1 - discount_pct / 100)).toFixed(2)), quantity: i.quantity })),
-          customer: { nome: customer_name, email: form.email, telefone: form.telefone, cpf: form.cpf },
+          customer: { nome: customer_name, email: form.email, telefone: form.telefone, cpf: getGatewayCPF(form.cpf) },
           shipping: { rua: form.rua, numero: form.numero, complemento: form.complemento, bairro: form.bairro, cidade: form.cidade, estado: form.estado, cep: form.cep },
           total: afterDiscount,
           externalRef,
@@ -504,10 +484,10 @@ export default function ExternalCheckoutPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">CPF <span className="text-brand-gold">*</span></label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">{docLabel(form.cpf)} / Documento <span className="text-brand-gold">*</span></label>
                 <input
-                  value={form.cpf} placeholder="000.000.000-00" required
-                  onChange={e => { setForm(f => ({ ...f, cpf: maskCPF(e.target.value) })); if (cpfError) setCpfError(''); }}
+                  value={form.cpf} placeholder="CPF, CUIT ou DNI" required
+                  onChange={e => { setForm(f => ({ ...f, cpf: maskDoc(e.target.value) })); if (cpfError) setCpfError(''); }}
                   className="w-full bg-brand-dark border border-brand-border px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold transition-colors"
                 />
                 {cpfError && <p className="text-xs text-red-400 mt-1">{cpfError}</p>}

@@ -3,34 +3,12 @@ import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { pixelInitiateCheckout, pixelAddPaymentInfo, pixelPurchase } from '../lib/pixel';
 import { products } from '../data/products';
+import { isValidDoc, maskDoc, docLabel, getGatewayCPF } from '../lib/docUtils';
 
 const BUMP_DISCOUNT = 0.20; // 20% off accessories added via order bump
 const BUMP_PRODUCTS = products.filter(p => p.category === 'acessorios');
 
 const formatPrice = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-const isValidCPF = (cpf) => {
-  const n = cpf.replace(/\D/g, '');
-  if (n.length !== 11 || /^(\d)\1{10}$/.test(n)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(n[i]) * (10 - i);
-  let r = (sum * 10) % 11;
-  if (r === 10 || r === 11) r = 0;
-  if (r !== parseInt(n[9])) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(n[i]) * (11 - i);
-  r = (sum * 10) % 11;
-  if (r === 10 || r === 11) r = 0;
-  return r === parseInt(n[10]);
-};
-
-const maskCPF = (v) => {
-  v = v.replace(/\D/g, '').slice(0, 11);
-  if (v.length > 9) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
-  if (v.length > 6) return v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
-  if (v.length > 3) return v.replace(/(\d{3})(\d{0,3})/, '$1.$2');
-  return v;
-};
 
 const maskPhone = (v) => {
   v = v.replace(/\D/g, '').slice(0, 11);
@@ -210,7 +188,7 @@ export default function CheckoutPage() {
             ...items.map(i => ({ name: i.shortName || i.name, price: i.price, quantity: i.quantity })),
             ...bumpItems.map(i => ({ name: i.name + ' (Order Bump)', price: i.price, quantity: 1 })),
           ],
-          customer: { nome: form.nome, email: form.email, telefone: form.telefone, cpf: form.cpf },
+          customer: { nome: form.nome, email: form.email, telefone: form.telefone, cpf: getGatewayCPF(form.cpf) },
           shipping: { rua: form.rua, numero: form.numero, complemento: form.complemento, bairro: form.bairro, cidade: form.cidade, estado: form.estado, cep: form.cep },
           total: totalWithBump,
           externalRef,
@@ -380,7 +358,7 @@ export default function CheckoutPage() {
               <h2 className="font-heading text-3xl text-white tracking-wide mb-6">DADOS PESSOAIS</h2>
               <form onSubmit={(e) => {
                 e.preventDefault();
-                if (!isValidCPF(form.cpf)) { setCpfError('CPF inválido. Verifique e tente novamente.'); return; }
+                if (!isValidDoc(form.cpf)) { setCpfError('Documento inválido. Verifique e tente novamente.'); return; }
                 setCpfError('');
                 pixelInitiateCheckout({
                   total,
@@ -398,14 +376,13 @@ export default function CheckoutPage() {
                 <Field label="WhatsApp" required colSpan={1}>
                   <Input name="telefone" value={form.telefone} onChange={(e) => set('telefone', maskPhone(e.target.value))} placeholder="(11) 99999-9999" required />
                 </Field>
-                <Field label="CPF" required colSpan={2}>
+                <Field label={`${docLabel(form.cpf)} / Documento`} required colSpan={2}>
                   <Input
                     name="cpf"
                     value={form.cpf}
-                    onChange={(e) => { set('cpf', maskCPF(e.target.value)); if (cpfError) setCpfError(''); }}
-                    placeholder="000.000.000-00"
+                    onChange={(e) => { set('cpf', maskDoc(e.target.value)); if (cpfError) setCpfError(''); }}
+                    placeholder="CPF, CUIT ou DNI"
                     required
-                    minLength={14}
                   />
                   {cpfError && <p className="text-xs text-brand-red mt-1">{cpfError}</p>}
                 </Field>
@@ -496,7 +473,7 @@ export default function CheckoutPage() {
                   <p className="text-sm text-white font-semibold">{form.nome}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{form.email}</p>
                   <p className="text-xs text-gray-400">{form.telefone}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">CPF: {form.cpf}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{docLabel(form.cpf)}: {form.cpf}</p>
                   <button onClick={() => setStep(1)} className="text-xs text-brand-gold hover:underline mt-2 block">Editar</button>
                 </div>
                 <div className="bg-brand-card border border-brand-border p-4">
