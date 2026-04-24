@@ -158,6 +158,7 @@ export default function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const tabRef = useRef('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Stats
   const [stats, setStats] = useState(null);
@@ -388,23 +389,38 @@ export default function AdminPage() {
     { id: 'links',     icon: '🔗', label: 'Links de Venda' },
   ];
 
+  const switchTab = (id) => { setTab(id); tabRef.current = id; unlockAudio(); setSidebarOpen(false); };
+
   return (
     <div className="flex min-h-screen bg-[#0a0a0a]">
       <AdminToast notifications={toasts} />
 
+      {/* ── MOBILE OVERLAY ───────────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
-      <aside className="w-56 bg-[#111] border-r border-brand-border flex flex-col flex-shrink-0">
-        <div className="px-5 py-5 border-b border-brand-border">
-          <Link to="/" className="font-brand text-lg text-brand-gold tracking-widest">CLICK<span className="text-white">RAID</span></Link>
-          <p className="text-[10px] text-gray-600 uppercase tracking-widest mt-0.5">Painel Admin</p>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#111] border-r border-brand-border flex flex-col flex-shrink-0 transition-transform duration-200
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:static lg:w-56 lg:translate-x-0`}>
+
+        <div className="px-5 py-5 border-b border-brand-border flex items-center justify-between">
+          <div>
+            <Link to="/" className="font-brand text-lg text-brand-gold tracking-widest">CLICK<span className="text-white">RAID</span></Link>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest mt-0.5">Painel Admin</p>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-500 hover:text-white p-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
 
-        <nav className="flex-1 py-4">
+        <nav className="flex-1 py-4 overflow-y-auto">
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => { setTab(t.id); tabRef.current = t.id; unlockAudio(); }}
-              className={`w-full flex items-center gap-3 px-5 py-3 text-sm transition-colors text-left ${
+              onClick={() => switchTab(t.id)}
+              className={`w-full flex items-center gap-3 px-5 py-3.5 text-sm transition-colors text-left ${
                 tab === t.id
                   ? 'bg-brand-gold/10 text-brand-gold border-r-2 border-brand-gold font-medium'
                   : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
@@ -426,8 +442,18 @@ export default function AdminPage() {
       </aside>
 
       {/* ── MAIN ─────────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-auto">
-        <div className="px-8 py-6 max-w-6xl mx-auto">
+      <main className="flex-1 overflow-auto min-w-0">
+
+        {/* Mobile top bar */}
+        <div className="lg:hidden sticky top-0 z-30 bg-[#111] border-b border-brand-border flex items-center justify-between px-4 py-3">
+          <button onClick={() => setSidebarOpen(true)} className="text-gray-400 hover:text-white p-1">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <span className="font-brand text-brand-gold tracking-widest text-sm">CLICK<span className="text-white">RAID</span></span>
+          <span className="text-xs text-gray-500 uppercase tracking-wide">{TABS.find(t => t.id === tab)?.label}</span>
+        </div>
+
+        <div className="px-4 py-4 lg:px-8 lg:py-6 max-w-6xl mx-auto pb-24 lg:pb-6">
 
           {/* ══ DASHBOARD ════════════════════════════════════════════════ */}
           {tab === 'dashboard' && (
@@ -552,12 +578,12 @@ export default function AdminPage() {
                   <button
                     onClick={syncGateway}
                     disabled={syncingGateway}
-                    className="text-xs border border-blue-500/50 text-blue-400 hover:border-blue-400 hover:text-blue-300 px-3 py-2 transition-colors disabled:opacity-40"
+                    className="text-xs border border-blue-500/50 text-blue-400 hover:border-blue-400 hover:text-blue-300 px-3 py-2 transition-colors disabled:opacity-40 whitespace-nowrap"
                   >
-                    {syncingGateway ? '⏳ Sincronizando...' : '🔄 Sincronizar Gateway'}
+                    {syncingGateway ? '⏳ Sincronizando...' : '🔄 Sincronizar'}
                   </button>
-                  <button onClick={exportCSV} className="text-xs border border-brand-border text-gray-400 hover:text-white px-3 py-2 transition-colors">
-                    ↓ Exportar CSV
+                  <button onClick={exportCSV} className="text-xs border border-brand-border text-gray-400 hover:text-white px-3 py-2 transition-colors whitespace-nowrap">
+                    ↓ CSV
                   </button>
                 </div>
               </div>
@@ -577,17 +603,17 @@ export default function AdminPage() {
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}
                   placeholder="Buscar por ID ou cliente..."
-                  className="ml-auto text-xs bg-[#111] border border-brand-border text-white px-3 py-1.5 focus:outline-none focus:border-brand-gold w-56"
+                  className="w-full sm:w-auto sm:ml-auto text-xs bg-[#111] border border-brand-border text-white px-3 py-1.5 focus:outline-none focus:border-brand-gold"
                 />
               </div>
 
               {/* Importar por ID */}
-              <div className="mb-4 flex gap-2 items-center">
+              <div className="mb-4 flex flex-col sm:flex-row gap-2">
                 <input
                   id="import-txid"
                   type="text"
-                  placeholder="Importar por ID de transação (ex: TRX123...)"
-                  className="text-xs bg-[#111] border border-brand-border text-white px-3 py-2 focus:outline-none focus:border-blue-500 flex-1 max-w-xs"
+                  placeholder="Importar por ID de transação da gateway..."
+                  className="text-xs bg-[#111] border border-brand-border text-white px-3 py-2 focus:outline-none focus:border-blue-500 flex-1"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && e.target.value.trim()) {
                       syncGateway(e.target.value.trim());
@@ -601,11 +627,10 @@ export default function AdminPage() {
                     if (el?.value?.trim()) { syncGateway(el.value.trim()); el.value = ''; }
                   }}
                   disabled={syncingGateway}
-                  className="text-xs border border-blue-500/50 text-blue-400 hover:border-blue-400 px-3 py-2 transition-colors disabled:opacity-40"
+                  className="text-xs border border-blue-500/50 text-blue-400 hover:border-blue-400 px-4 py-2 transition-colors disabled:opacity-40 whitespace-nowrap"
                 >
-                  {syncingGateway ? '⏳' : '↓ Importar'}
+                  {syncingGateway ? '⏳ Importando...' : '↓ Importar por ID'}
                 </button>
-                <span className="text-[10px] text-gray-600">Cole o ID da transação da gateway para importar um pedido específico</span>
               </div>
 
               {ordersLoading ? <Spinner /> : (
@@ -728,14 +753,14 @@ export default function AdminPage() {
                   value={custSearch}
                   onChange={(e) => setCustSearch(e.target.value)}
                   placeholder="Buscar por nome, e-mail ou CPF..."
-                  className="text-xs bg-[#111] border border-brand-border text-white px-3 py-2 focus:outline-none focus:border-brand-gold w-72"
+                  className="text-xs bg-[#111] border border-brand-border text-white px-3 py-2 focus:outline-none focus:border-brand-gold w-full sm:w-72"
                 />
               </div>
 
               {custLoading ? <Spinner /> : (
                 <div className="bg-[#111] border border-brand-border rounded overflow-hidden">
-                  {/* Header */}
-                  <div className="grid grid-cols-12 px-5 py-3 border-b border-brand-border text-[10px] uppercase tracking-widest text-gray-600">
+                  {/* Desktop header */}
+                  <div className="hidden sm:grid grid-cols-12 px-5 py-3 border-b border-brand-border text-[10px] uppercase tracking-widest text-gray-600">
                     <div className="col-span-3">Nome</div>
                     <div className="col-span-3">E-mail</div>
                     <div className="col-span-2">Telefone</div>
@@ -748,8 +773,9 @@ export default function AdminPage() {
                     ? <p className="text-center text-gray-600 py-16">Nenhum cliente encontrado.</p>
                     : filteredCustomers.map(c => (
                       <div key={c.id} className="border-b border-brand-border last:border-0">
+                        {/* Desktop row */}
                         <div
-                          className="grid grid-cols-12 px-5 py-3 items-center cursor-pointer hover:bg-white/5 transition-colors"
+                          className="hidden sm:grid grid-cols-12 px-5 py-3 items-center cursor-pointer hover:bg-white/5 transition-colors"
                           onClick={() => setExpandedCustomer(expandedCustomer === c.id ? null : c.id)}
                         >
                           <div className="col-span-3 text-xs text-white font-medium truncate">{c.full_name || '—'}</div>
@@ -761,9 +787,27 @@ export default function AdminPage() {
                             {c.is_admin && <span className="text-[10px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded">ADMIN</span>}
                           </div>
                         </div>
+                        {/* Mobile card */}
+                        <div
+                          className="sm:hidden px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors"
+                          onClick={() => setExpandedCustomer(expandedCustomer === c.id ? null : c.id)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-white font-medium truncate">{c.full_name || '—'}</p>
+                              <p className="text-xs text-gray-500 truncate mt-0.5">{c.email || '—'}</p>
+                              {c.phone && <p className="text-xs text-gray-600">{c.phone}</p>}
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-3">
+                              <p className="text-sm text-brand-gold font-bold">{fmt(c.total_spent)}</p>
+                              <p className="text-[10px] text-gray-600">{c.orders} pedido{c.orders !== 1 ? 's' : ''}</p>
+                              {c.is_admin && <span className="text-[9px] bg-brand-gold/20 text-brand-gold px-1.5 py-0.5 rounded">ADMIN</span>}
+                            </div>
+                          </div>
+                        </div>
 
                         {expandedCustomer === c.id && (
-                          <div className="px-5 pb-4 bg-black/30 border-t border-brand-border grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 animate-fade-in">
+                          <div className="px-4 sm:px-5 pb-4 bg-black/30 border-t border-brand-border grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 animate-fade-in">
                             {[
                               ['CPF', c.cpf],
                               ['Membro desde', fmtDate(c.created_at)],
@@ -793,6 +837,23 @@ export default function AdminPage() {
           {tab === 'links' && <PaymentLinksTab />}
 
         </div>
+
+        {/* Mobile bottom nav */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-[#111] border-t border-brand-border z-30 flex">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => switchTab(t.id)}
+              className={`flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors ${
+                tab === t.id ? 'text-brand-gold' : 'text-gray-600'
+              }`}
+            >
+              <span className="text-lg">{t.icon}</span>
+              <span className="text-[9px] uppercase tracking-wide">{t.label.split(' ')[0]}</span>
+            </button>
+          ))}
+        </nav>
+
       </main>
     </div>
   );
@@ -850,46 +911,57 @@ function ProductsAdminTab() {
       </div>
 
       <div className="bg-[#111] border border-brand-border rounded overflow-hidden">
-        <div className="grid grid-cols-12 px-4 py-3 border-b border-brand-border text-[10px] uppercase tracking-widest text-gray-600">
+        {/* Desktop table header */}
+        <div className="hidden sm:grid grid-cols-12 px-4 py-3 border-b border-brand-border text-[10px] uppercase tracking-widest text-gray-600">
           <div className="col-span-1">Foto</div>
           <div className="col-span-4">Nome</div>
           <div className="col-span-2">Categoria</div>
           <div className="col-span-2">Preço</div>
-          <div className="col-span-1">Destaque</div>
+          <div className="col-span-1">Badge</div>
           <div className="col-span-2">Avaliação</div>
         </div>
         {filtered.map(p => (
-          <div key={p.id} className="grid grid-cols-12 px-4 py-3 items-center border-b border-brand-border last:border-0 hover:bg-white/5 transition-colors">
-            <div className="col-span-1">
-              <img src={p.images?.[0]} alt={p.name} className="w-10 h-10 object-cover bg-brand-dark" />
+          <div key={p.id} className="border-b border-brand-border last:border-0 hover:bg-white/5 transition-colors">
+            {/* Desktop row */}
+            <div className="hidden sm:grid grid-cols-12 px-4 py-3 items-center">
+              <div className="col-span-1">
+                <img src={p.images?.[0]} alt={p.name} className="w-10 h-10 object-cover bg-brand-dark" />
+              </div>
+              <div className="col-span-4">
+                <p className="text-xs text-white font-medium">{p.name}</p>
+                <p className="text-[10px] text-gray-600">ID {p.id} · {p.reviews} avaliações</p>
+              </div>
+              <div className="col-span-2 text-xs text-gray-400">{CATEGORY_LABELS[p.category] || p.category}</div>
+              <div className="col-span-2">
+                <p className="text-xs text-brand-gold font-bold">R$ {p.price.toFixed(2)}</p>
+                {p.originalPrice && <p className="text-[10px] text-gray-600 line-through">R$ {p.originalPrice.toFixed(2)}</p>}
+              </div>
+              <div className="col-span-1">
+                {p.badge && <span className={`text-[10px] px-1.5 py-0.5 rounded ${p.badge === 'hot' ? 'bg-brand-red/20 text-brand-red' : p.badge === 'new' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>{p.badgeText || p.badge}</span>}
+              </div>
+              <div className="col-span-2 text-xs text-yellow-400">
+                {'★'.repeat(Math.floor(p.rating))}{'☆'.repeat(5 - Math.floor(p.rating))}
+                <span className="text-gray-600 ml-1">{p.rating}</span>
+              </div>
             </div>
-            <div className="col-span-4">
-              <p className="text-xs text-white font-medium">{p.name}</p>
-              <p className="text-[10px] text-gray-600">ID {p.id} · {p.reviews} avaliações</p>
-            </div>
-            <div className="col-span-2 text-xs text-gray-400">{CATEGORY_LABELS[p.category] || p.category}</div>
-            <div className="col-span-2">
-              <p className="text-xs text-brand-gold font-bold">R$ {p.price.toFixed(2)}</p>
-              {p.originalPrice && <p className="text-[10px] text-gray-600 line-through">R$ {p.originalPrice.toFixed(2)}</p>}
-            </div>
-            <div className="col-span-1">
-              {p.badge && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  p.badge === 'hot' ? 'bg-brand-red/20 text-brand-red' :
-                  p.badge === 'new' ? 'bg-blue-500/20 text-blue-400' :
-                  'bg-green-500/20 text-green-400'
-                }`}>{p.badgeText || p.badge}</span>
-              )}
-            </div>
-            <div className="col-span-2 text-xs text-yellow-400">
-              {'★'.repeat(Math.floor(p.rating))}{'☆'.repeat(5 - Math.floor(p.rating))}
-              <span className="text-gray-600 ml-1">{p.rating}</span>
+            {/* Mobile card */}
+            <div className="sm:hidden flex items-center gap-3 px-4 py-3">
+              <img src={p.images?.[0]} alt={p.name} className="w-12 h-12 object-cover bg-brand-dark flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white font-medium truncate">{p.name}</p>
+                <p className="text-xs text-gray-500">{CATEGORY_LABELS[p.category]} · ID {p.id}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-brand-gold font-bold">R$ {p.price.toFixed(2)}</span>
+                  {p.badge && <span className={`text-[9px] px-1.5 py-0.5 rounded ${p.badge === 'hot' ? 'bg-brand-red/20 text-brand-red' : 'bg-blue-500/20 text-blue-400'}`}>{p.badgeText || p.badge}</span>}
+                </div>
+              </div>
+              <div className="text-xs text-yellow-400 flex-shrink-0">{'★'.repeat(Math.floor(p.rating))}<span className="text-gray-600 ml-0.5">{p.rating}</span></div>
             </div>
           </div>
         ))}
         <div className="px-4 py-3 border-t border-brand-border flex justify-between text-xs">
-          <span className="text-gray-600">{filtered.length} itens no catálogo</span>
-          <span className="text-brand-gold font-bold">Valor médio: R$ {filtered.length ? (totalValue / filtered.length).toFixed(2) : '0'}</span>
+          <span className="text-gray-600">{filtered.length} itens</span>
+          <span className="text-brand-gold font-bold">Médio: R$ {filtered.length ? (totalValue / filtered.length).toFixed(2) : '0'}</span>
         </div>
       </div>
     </div>
@@ -1072,7 +1144,7 @@ function PaymentLinksTab() {
                   </div>
 
                   {sp.mode === 'catalog' ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <select
                         value={sp.productId}
                         onChange={e => updateRow(idx, { productId: e.target.value })}
@@ -1086,30 +1158,32 @@ function PaymentLinksTab() {
                       <input
                         type="number" min="1" max="99" value={sp.quantity}
                         onChange={e => updateRow(idx, { quantity: parseInt(e.target.value) || 1 })}
-                        className="w-16 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
+                        className="w-full sm:w-16 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
                         placeholder="Qtd"
                       />
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         value={sp.customName}
                         onChange={e => updateRow(idx, { customName: e.target.value })}
                         placeholder="Nome do produto"
                         className="flex-1 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold"
                       />
-                      <input
-                        type="number" min="0.01" step="0.01" value={sp.customPrice}
-                        onChange={e => updateRow(idx, { customPrice: e.target.value })}
-                        placeholder="R$ preço"
-                        className="w-28 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold"
-                      />
-                      <input
-                        type="number" min="1" max="99" value={sp.quantity}
-                        onChange={e => updateRow(idx, { quantity: parseInt(e.target.value) || 1 })}
-                        placeholder="Qtd"
-                        className="w-16 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="number" min="0.01" step="0.01" value={sp.customPrice}
+                          onChange={e => updateRow(idx, { customPrice: e.target.value })}
+                          placeholder="R$ preço"
+                          className="flex-1 sm:w-28 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold"
+                        />
+                        <input
+                          type="number" min="1" max="99" value={sp.quantity}
+                          onChange={e => updateRow(idx, { quantity: parseInt(e.target.value) || 1 })}
+                          placeholder="Qtd"
+                          className="w-16 bg-brand-black border border-brand-border px-3 py-2.5 text-sm text-white text-center focus:outline-none focus:border-brand-gold"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1141,7 +1215,8 @@ function PaymentLinksTab() {
         </div>
       ) : (
         <div className="bg-[#111] border border-brand-border">
-          <div className="grid grid-cols-12 px-4 py-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest border-b border-brand-border">
+          {/* Desktop header */}
+          <div className="hidden sm:grid grid-cols-12 px-4 py-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest border-b border-brand-border">
             <div className="col-span-3">Cliente</div>
             <div className="col-span-3">Produtos</div>
             <div className="col-span-2">Valor PIX</div>
@@ -1153,44 +1228,64 @@ function PaymentLinksTab() {
             const val = totalAmount(link.items, link.discount_pct);
             const isExpired = link.expires_at && new Date(link.expires_at) < new Date() && link.status === 'pending';
             const statusDisplay = isExpired ? 'expired' : link.status;
+            const actions = (
+              <>
+                {(link.status === 'pending' && !isExpired) && (
+                  <>
+                    <button
+                      onClick={() => copyLink(link.token)}
+                      className={`text-xs px-3 py-1.5 font-bold uppercase tracking-wide transition-all ${copiedId === link.token ? 'bg-green-500 text-white' : 'bg-brand-gold text-brand-black hover:bg-brand-gold-light'}`}
+                    >
+                      {copiedId === link.token ? '✓ Copiado' : 'Copiar Link'}
+                    </button>
+                    <button onClick={() => handleCancel(link.id)} className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2">✕</button>
+                  </>
+                )}
+                {link.status === 'paid' && <span className="text-xs text-green-400 font-medium">✓ Pago</span>}
+                {(link.status === 'cancelled' || link.status === 'expired' || isExpired) && <span className="text-xs text-gray-600">Inativo</span>}
+              </>
+            );
             return (
-              <div key={link.id} className="grid grid-cols-12 px-4 py-4 items-center border-b border-brand-border last:border-0 hover:bg-white/5 transition-colors">
-                <div className="col-span-3">
-                  <p className="text-sm text-white font-medium">{link.customer_name}</p>
-                  {link.customer_email && <p className="text-xs text-gray-600 truncate">{link.customer_email}</p>}
+              <div key={link.id} className="border-b border-brand-border last:border-0 hover:bg-white/5 transition-colors">
+                {/* Desktop row */}
+                <div className="hidden sm:grid grid-cols-12 px-4 py-4 items-center">
+                  <div className="col-span-3">
+                    <p className="text-sm text-white font-medium">{link.customer_name}</p>
+                    {link.customer_email && <p className="text-xs text-gray-600 truncate">{link.customer_email}</p>}
+                  </div>
+                  <div className="col-span-3">
+                    {(link.items || []).slice(0, 2).map((i, idx) => (
+                      <p key={idx} className="text-xs text-gray-400 truncate">{i.name} ×{i.quantity}</p>
+                    ))}
+                    {link.items?.length > 2 && <p className="text-xs text-gray-600">+{link.items.length - 2} mais</p>}
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-brand-gold font-bold">{fmt(val)}</p>
+                    {link.discount_pct > 0 && <p className="text-xs text-green-400">-{link.discount_pct}%</p>}
+                  </div>
+                  <div className="col-span-1"><LinkBadge status={statusDisplay} /></div>
+                  <div className="col-span-1"><p className="text-xs text-gray-600">{link.expires_at ? fmtShort(link.expires_at) : '—'}</p></div>
+                  <div className="col-span-2 flex gap-2 justify-end">{actions}</div>
                 </div>
-                <div className="col-span-3">
-                  {(link.items || []).slice(0, 2).map((i, idx) => (
-                    <p key={idx} className="text-xs text-gray-400 truncate">{i.name} ×{i.quantity}</p>
-                  ))}
-                  {link.items?.length > 2 && <p className="text-xs text-gray-600">+{link.items.length - 2} mais</p>}
-                </div>
-                <div className="col-span-2">
-                  <p className="text-sm text-brand-gold font-bold">{fmt(val)}</p>
-                  {link.discount_pct > 0 && <p className="text-xs text-green-400">-{link.discount_pct}% extra</p>}
-                </div>
-                <div className="col-span-1"><LinkBadge status={statusDisplay} /></div>
-                <div className="col-span-1">
-                  <p className="text-xs text-gray-600">{link.expires_at ? fmtShort(link.expires_at) : '—'}</p>
-                </div>
-                <div className="col-span-2 flex gap-2 justify-end">
-                  {(link.status === 'pending' && !isExpired) && (
-                    <>
-                      <button
-                        onClick={() => copyLink(link.token)}
-                        className={`text-xs px-3 py-1.5 font-bold uppercase tracking-wide transition-all ${copiedId === link.token ? 'bg-green-500 text-white' : 'bg-brand-gold text-brand-black hover:bg-brand-gold-light'}`}
-                      >
-                        {copiedId === link.token ? '✓ Copiado' : 'Copiar'}
-                      </button>
-                      <button onClick={() => handleCancel(link.id)} className="text-xs text-gray-600 hover:text-red-400 transition-colors px-1">✕</button>
-                    </>
-                  )}
-                  {(link.status === 'paid') && (
-                    <span className="text-xs text-green-400 font-medium">✓ Pago</span>
-                  )}
-                  {(link.status === 'cancelled' || link.status === 'expired' || isExpired) && (
-                    <span className="text-xs text-gray-600">Inativo</span>
-                  )}
+                {/* Mobile card */}
+                <div className="sm:hidden px-4 py-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white font-medium">{link.customer_name}</p>
+                      {link.customer_email && <p className="text-xs text-gray-500 truncate">{link.customer_email}</p>}
+                    </div>
+                    <div className="ml-3 flex-shrink-0 text-right">
+                      <p className="text-sm text-brand-gold font-bold">{fmt(val)}</p>
+                      <LinkBadge status={statusDisplay} />
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    {(link.items || []).slice(0, 2).map((i, idx) => (
+                      <p key={idx} className="text-xs text-gray-500 truncate">{i.name} ×{i.quantity}</p>
+                    ))}
+                    {link.items?.length > 2 && <p className="text-xs text-gray-600">+{link.items.length - 2} mais</p>}
+                  </div>
+                  <div className="flex items-center gap-2">{actions}</div>
                 </div>
               </div>
             );
