@@ -73,14 +73,15 @@ export default async function handler(req, res) {
         // Try to update existing order first
         const { data: existing } = await sb
           .from('orders')
-          .select('id, user_id')
+          .select('id, user_id, customer_data')
           .eq('transaction_id', transactionId)
           .maybeSingle();
 
         if (existing) {
-          await sb.from('orders')
-            .update({ status: 'paid', customer_data: customerData })
-            .eq('transaction_id', transactionId);
+          // Preserve existing customer_data (has real CPF/CUIT from checkout)
+          const update = { status: 'paid' };
+          if (!existing.customer_data) update.customer_data = customerData;
+          await sb.from('orders').update(update).eq('transaction_id', transactionId);
         } else {
           await sb.from('orders').insert({
             transaction_id: transactionId,

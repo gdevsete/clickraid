@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { pixelPurchase, pixelInitiateCheckout } from '../lib/pixel';
+import { pixelPurchase, pixelInitiateCheckout, pixelAddPaymentInfo } from '../lib/pixel';
 import { isValidDoc, maskDoc, docLabel, getGatewayCPF } from '../lib/docUtils';
 
 const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -90,6 +90,20 @@ export default function ExternalCheckoutPage() {
   }, [token]);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // Fire InitiateCheckout when the form becomes visible
+  useEffect(() => {
+    if (loadState === 'ready' && linkData) {
+      const items = linkData.items || [];
+      const baseTotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+      const finalTotal = baseTotal * (1 - (linkData.discount_pct || 0) / 100) * 0.95;
+      pixelInitiateCheckout({
+        total: finalTotal,
+        numItems: items.reduce((s, i) => s + i.quantity, 0),
+        contentIds: items.map(i => i.id),
+      });
+    }
+  }, [loadState]);
 
   if (!linkData && loadState === 'loading') {
     return (
@@ -249,7 +263,7 @@ export default function ExternalCheckoutPage() {
       }).catch(() => {});
       setStep('pix');
       startPolling(txId);
-      pixelInitiateCheckout({ total: finalTotal, numItems: items.reduce((s, i) => s + i.quantity, 0), contentIds: items.map(i => i.id) });
+      pixelAddPaymentInfo({ total: finalTotal, contentIds: items.map(i => i.id) });
     } catch (err) {
       setPayError(err.message);
     } finally {
