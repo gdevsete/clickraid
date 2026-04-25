@@ -1067,7 +1067,8 @@ function PaymentLinksTab() {
 
   const totalAmount = (items, discountPct) => {
     const base = (items || []).reduce((s, i) => s + i.price * i.quantity, 0);
-    return base * (1 - (discountPct || 0) / 100) * 0.95;
+    // Items stored in reais; fmt() expects centavos — multiply by 100
+    return Math.round(base * (1 - (discountPct || 0) / 100) * 0.95 * 100);
   };
 
   return (
